@@ -1,0 +1,8362 @@
+import 'dotenv/config';
+import { Telegraf, Markup } from 'telegraf';
+import yts from 'yt-search';
+import crypto from 'crypto';
+import axios from 'axios';
+import Jimp from 'jimp';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import CryptoJS from 'crypto-js';
+import fetch from 'node-fetch';
+import * as cheerio from 'cheerio';
+import WebSocket from "ws";
+import path from 'path';
+import { fileTypeFromBuffer } from "file-type";
+import FormData from "form-data";
+import { exec } from 'child_process';
+import { mohnd } from "./mohnd.js";
+import { Readable } from 'stream'
+import sharp from 'sharp'
+import { performance } from "perf_hooks";
+import { ogmp3 } from "./youtubedl.js"; 
+import { webp2png } from "./webp2mp4.js";
+import { webp2mp4 } from "./webp2mp4.js";
+import { ffmpeg } from "./converter.js";
+import  uploadFile  from "./uploadFile.js";
+import { ephoto } from "./ephoto.js";
+import translate from "@vitalets/google-translate-api";
+import chalk from "chalk";
+import setupAudio from "./audio.js";
+import { musicallydown } from "./tiktok.js"; 
+import  uploadImage  from "./uploadImage.js";
+import ffmpegStatic from "ffmpeg-static";
+import ytdl from "ytdl-core";
+import { setupHeadersCommand } from './tiktok.js';
+import { setupTiktokCommand } from './T.js';
+
+const bot = new Telegraf(process.env.BOT_TOKEN);
+
+//=============
+setupHeadersCommand(bot);
+setupAudio(bot);
+setupTiktokCommand(bot);
+const OWNER_ID = ['1999373306']
+const owners = ['1999373306']
+// حط الاي دي بتاعك انت (علشان بس المطور يقدر يستخدمه)
+const developers = ['1999373306']
+
+// ====== Sessions ===================
+  
+// ⚡ تهيئة قاعدة البيانات
+global.db = {
+  users: {},
+  chats: {},
+  settings: {}
+};
+
+function isNumber(x) {
+  return typeof x === "number" && !isNaN(x);
+}
+
+// 🛠️ دالة initDatabase
+function initDatabase(ctx, botId) {
+  try {
+    const sender = ctx.from.id;
+    const chatId = ctx.chat.id;
+
+    // 🧑 تهيئة المستخدم
+    let user = global.db.users[sender];
+    if (typeof user !== "object") global.db.users[sender] = {};
+    user = global.db.users[sender];
+
+    Object.assign(user, {
+      chip: isNumber(user.chip) ? user.chip : 0,
+      level: isNumber(user.level) ? user.level : 1,
+      atm: isNumber(user.atm) ? user.atm : 0,
+      fullatm: isNumber(user.fullatm) ? user.fullatm : 0,
+      bank: isNumber(user.bank) ? user.bank : 0,
+      health: isNumber(user.health) ? user.health : 100,
+      potion: isNumber(user.potion) ? user.potion : 0,
+      trash: isNumber(user.trash) ? user.trash : 0,
+      wood: isNumber(user.wood) ? user.wood : 0,
+      rock: isNumber(user.rock) ? user.rock : 0,
+      string: isNumber(user.string) ? user.string : 0,
+      petfood: isNumber(user.petfood) ? user.petfood : 0,
+      emerald: isNumber(user.emerald) ? user.emerald : 0,
+      diamond: isNumber(user.diamond) ? user.diamond : 0,
+      gold: isNumber(user.gold) ? user.gold : 0,
+      iron: isNumber(user.iron) ? user.iron : 0,
+      common: isNumber(user.common) ? user.common : 0,
+      uncommon: isNumber(user.uncommon) ? user.uncommon : 0,
+      mythic: isNumber(user.mythic) ? user.mythic : 0,
+      legendary: isNumber(user.legendary) ? user.legendary : 0,
+      umpan: isNumber(user.umpan) ? user.umpan : 0,
+      ojekk: isNumber(user.ojekk) ? user.ojekk : 0,
+      lastmisi: isNumber(user.lastmisi) ? user.lastmisi : 0,
+      premium: user.premium || false,
+      premiumTime: isNumber(user.premiumTime) ? user.premiumTime : 0
+    });
+
+    // 🏘️ تهيئة الشات
+    let chats = global.db.chats[chatId];
+    if (typeof chats !== "object") global.db.chats[chatId] = {};
+    chats = global.db.chats[chatId];
+
+    Object.assign(chats, {
+      welcome: "welcome" in chats ? chats.welcome : false,
+      goodbye: "goodbye" in chats ? chats.goodbye : false
+    });
+
+    // ⚙️ تهيئة الإعدادات
+    let setting = global.db.settings[botId];
+    if (typeof setting !== "object") global.db.settings[botId] = {};
+    setting = global.db.settings[botId];
+
+    Object.assign(setting, {
+      anticall: "anticall" in setting ? setting.anticall : false,
+      status: isNumber(setting.status) ? setting.status : 0,
+      autobio: "autobio" in setting ? setting.autobio : false,
+      autoread: "autoread" in setting ? setting.autoread : false,
+      onlygrub: "onlygrub" in setting ? setting.onlygrub : true,
+      onlypc: "onlypc" in setting ? setting.onlypc : false
+    });
+
+  } catch (err) {
+    console.error("Database init error:", err);
+  }
+}
+
+export { initDatabase };
+// =============================
+
+// 🌷 Function: WebP → MP4
+
+global.db = global.db || {};
+global.db.users = global.db.users || {};
+
+// =============================
+// Anti-Spam plugin
+// by Mohnd + ChatGPT
+
+
+export async function before(m, { isAdmin, isOwner, isBotAdmin, conn }) {
+  const users = global.db.data.users;
+  const chats = global.db.data.chats;
+
+  // تخطي الحالات اللي مش محتاجة فلترة
+  if (
+    !chats[m.chat]?.antiSpam || // لو خاصية AntiSpam مش مفعلة
+    m.isBaileys || // رسائل البوت نفسه
+    m.mtype === "protocolMessage" ||
+    m.mtype === "pollUpdateMessage" ||
+    m.mtype === "reactionMessage"
+  )
+    return;
+
+  if (
+    !m.msg ||
+    !m.message ||
+    m.key.remoteJid !== m.chat ||
+    users[m.sender]?.banned ||
+    chats[m.chat]?.isBanned
+  )
+    return;
+
+  // حفظ حالة السبام لكل يوزر
+  this.spam = this.spam || {};
+  this.spam[m.sender] = this.spam[m.sender] || { count: 0, lastspam: 0 };
+
+  const now = performance.now();
+  const timeDifference = now - this.spam[m.sender].lastspam;
+
+  if (timeDifference < 5000) {
+    // أقل من 5 ثواني = ممكن Spam
+    this.spam[m.sender].count++;
+
+    if (this.spam[m.sender].count >= 4 && !isOwner && !isAdmin) {
+      // Ban مؤقت
+      users[m.sender].banned = true;
+      this.spam[m.sender].lastspam = now + 5000;
+
+      // بعد 10 ثواني البان بيتشال
+      setTimeout(() => {
+        users[m.sender].banned = false;
+        this.spam[m.sender].count = 0;
+
+        if (conn) {
+          conn.sendMessage(m.chat, { react: { text: "✅", key: m.key } });
+        }
+      }, 10000);
+
+      // رسالة توضيح
+      return m.reply("⚠️ تم حظرك مؤقتًا من استخدام البوت، انتظر 10 ثوانٍ ..");
+    }
+  } else {
+    // Reset العداد
+    this.spam[m.sender].count = 0;
+  }
+
+  this.spam[m.sender].lastspam = now;
+}
+// =============================
+
+
+async function Uguu(buffer, filename) {
+  try {
+    const form = new FormData();
+    form.append("files[]", buffer, { filename });
+    const { data } = await axios.post("https://uguu.se/upload.php", form, {
+      headers: form.getHeaders(),
+    });
+
+    if (data.files && data.files[0]) {
+      return {
+        name: data.files[0].name,
+        url: data.files[0].url,
+        size: data.files[0].size,
+      };
+    } else {
+      throw new Error("فشل في رفع الملف 🌷");
+    }
+  } catch (err) {
+    throw `🌷 خطأ أثناء الرفع: ${err.message}`;
+  }
+}
+
+
+export async function getBuffer(ctx, fileId) {
+  const fileLink = await ctx.telegram.getFileLink(fileId)
+  const response = await fetch(fileLink.href)
+  const buffer = Buffer.from(await response.arrayBuffer())
+
+  // تحويل Buffer لـ ArrayBuffer
+  const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+
+  return { buffer, arrayBuffer }
+}
+//================
+function msToDate(ms) {
+  let d = Math.floor(ms / 86400000);
+  let h = Math.floor(ms / 3600000) % 24;
+  let m = Math.floor(ms / 60000) % 60;
+  let s = Math.floor(ms / 1000) % 60;
+  return `${d} يوم ${h} ساعة ${m} دقيقة ${s} ثانية`;
+}
+
+
+function clockString(ms) {
+  let h = Math.floor(ms / 3600000);
+  let m = Math.floor(ms / 60000) % 60;
+  let s = Math.floor(ms / 1000) % 60;
+  return [h, m, s].map(v => v.toString().padStart(2, '0')).join(':');
+}
+
+bot.command(["menu", "start"], async (ctx) => {
+  const uptime = clockString(process.uptime() * 1000);
+
+  const mainMenuMessage = `\`\`\`
+┏━----╼━━╃⌬〔🌷〕⌬╄━━╾---━┓
+┇ 𝙱𝙾𝚃 𝙽𝙰𝙼𝙴 : 𝑵𝒂𝒅𝒐𝒔𝒉𝒂 & Tulip BoT
+┇ 𝚅𝙴𝚁𝚂𝙸𝙾𝙽 : 1.0
+┇ 𝚁𝚄𝙽𝚃𝙸𝙼𝙴 : ${uptime}
+┗━----╼━━╃⌬〔🌷〕⌬╄━━╾---━┛
+
+┏━---╼━━╃⌬〔🌷〕⌬╄━━╾---━┓
+┇ [ select on botton ]
+┗━---╼━━╃⌬〔🌷〕⌬╄━━╾---━┛
+\`\`\``;
+
+  const mainKeyboard = [
+    [
+      { text: "『 FLAGS MENU🌷 』", callback_data: "flags_menu" },
+      { text: "『 DOWNLOAD🌷 』", callback_data: "download_menu" }
+    ],
+	  [
+       
+      { text: "『  AUDIO MENU🌷 』", callback_data: "ad_menu" }
+      ],
+    [
+      { text: "『 IMG MENU🌷 』", callback_data: "img_menu" },
+      { text: "『 USERS MENU🌷 』", callback_data: "users_menu" }
+    ],
+    [
+        
+            { text: "『 DEEN MENU🌷 』", callback_data: "deen_menu" }
+      ],
+    [
+      { text: "『 AI MENU🌷 』", callback_data: "ai_menu" },
+      { text: "『 FUN MENU🌷 』", callback_data: "fun_menu" }
+    ],
+    	  
+  ];
+
+  await ctx.replyWithPhoto("https://files.catbox.moe/omtrli.png", {
+    caption: mainMenuMessage,
+    parse_mode: "Markdown",
+    reply_markup: { inline_keyboard: mainKeyboard }
+  });
+});
+
+// 🟢 FLAGS MENU
+bot.action("flags_menu", async (ctx) => {
+  await ctx.deleteMessage();
+  const text = `
+<b>🌷 FLAGS MENU 🌷</b>
+  ┏━━⊜
+❐╎◡̈⃝🇯🇴❯ /flag1 ↜ الأردن  
+❐╎◡̈⃝🇸🇦❯ /flag2 ↜ السعودية  
+❐╎◡̈⃝🇲🇦❯ /flag3 ↜ المغرب  
+❐╎◡̈⃝🇸🇩❯ /flag4 ↜ السودان  
+❐╎◡̈⃝🇮🇶❯ /flag5 ↜ الإمارات  
+❐╎◡̈⃝🇾🇪❯ /flag6 ↜ اليمن  
+❐╎◡̈⃝🇪🇭❯ /flag7 ↜ سوريا  
+❐╎◡̈⃝🇸🇩❯ /flag8 ↜ فلسطين  
+❐╎◡̈⃝🇪🇬❯ /flag9 ↜ مصر  
+ ┗━━━━━━━━━━⬣
+`;
+  await ctx.replyWithPhoto("https://files.catbox.moe/omtrli.png", {
+    caption: text,
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: [[{ text: "‹ 𝗕𝗮𝗰𝗸", callback_data: "back" }]] }
+  });
+});
+bot.action("group_menu", async (ctx) => {
+  await ctx.deleteMessage();
+  const text = `
+<b>🌷 GROUP MENU 🌷</b>
+  ┏━━⊜
+❐╎◡̈⃝🌷❯ /kick ↜ طرد الاعضاء
+❐╎◡̈⃝🌷❯ /admin ↜ لاعطاء الاعضاء مشرف 
+❐╎◡̈⃝🌷❯ /demote ↜ لإنزال الاعضاء من مشرف
+❐╎◡̈⃝🌷❯ /ht ↜ عمل منشن مخفي للعضاء
+❐╎◡̈⃝🌷❯ /link ↜ يجيب لينك الجروب
+❐╎◡̈⃝🌷❯ /pin ↜ تثبيت رسائل الجروب
+❐╎◡̈⃝🌷❯ /unpin ↜ يلغي تثبيت رسائل الجروب 
+❐╎◡̈⃝🌷❯ /destacar ↜ يميز رساله
+❐╎◡̈⃝🌷❯ /desmarcar ↜ يلغي تميز رساله
+❐╎◡̈⃝🌷❯ /totag ↜ يعمل اي رساله تريب عليها منشن
+❐╎◡̈⃝🌷❯ /delete ↜ لحذف الرسائل من الجروب
+❐╎◡̈⃝🌷❯ /tagall ↜ يمنشن جميع اعضاء الجروب
+❐╎◡̈⃝🌷❯ /warn ↜ يتم وضع تحذير علي المستخدم
+❐╎◡̈⃝🌷❯ /setdesc ↜ تغير بايو الجروب
+❐╎◡̈⃝🌷❯ /setname ↜ تغير اسم الجروب 
+❐╎◡̈⃝🌷❯ /kickall ↜ طرد جميع الاعضاء
+❐╎◡̈⃝🌷❯ /mute ↜ كتم العضو  
+❐╎◡̈⃝🌷❯ /group ↜ لفتح و قفل الجروب 
+❐╎◡̈⃝🌷❯ /unmute ↜ الغاء الكتم عن العضو
+ ┗━━━━━━━━━━⬣
+`;
+  await ctx.replyWithPhoto("https://files.catbox.moe/omtrli.png", {
+    caption: text,
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: [[{ text: "‹ 𝗕𝗮𝗰𝗸", callback_data: "back" }]] }
+  });
+});
+
+// 🟢 DOWNLOAD MENU
+bot.action("download_menu", async (ctx) => {
+  await ctx.deleteMessage();
+  const text = `
+<b>🌷 DOWNLOAD MENU 🌷</b>
+  ┏━━⊜
+❐╎◡̈⃝🌷❯ /play ↜ تحميل الصوت من يوتيوب  
+❐╎◡̈⃝🌷❯ /video ↜ تحميل فيديوهات من اليوتيوب ب الاسم 
+❐╎◡̈⃝🌷❯ /ytdl ↜ مصدر تحميل فيديو 
+❐╎◡̈⃝🌷❯ /ytinfo ↜ جلب معلومات الفيد
+❐╎◡̈⃝🌷❯ /yttags ↜ يجيب اي تاج ف الفيد
+❐╎◡̈⃝🌷❯ /google ↜ بحث عن اي شىء في جوجل
+❐╎◡̈⃝🌷❯ /vo2 ↜ صنع فيديو من مخيلتك
+❐╎◡̈⃝🌷❯ /suno ↜ صنع اغنيه من مخيلتك
+❐╎◡̈⃝🌷❯ /tiktok ↜ تحميل فيديوهات تيك توك  
+❐╎◡̈⃝🌷❯ /git ↜ تحميل الريبو من جيتهاب
+❐╎◡̈⃝🌷❯ /facebook ↜ تحميل فيديوهات من فيس 
+❐╎◡̈⃝🌷❯ /pinterest ↜ جلب صور من بنتريست
+❐╎◡̈⃝🌷❯ /ttaudio ↜ تحميل صوت من تيك
+❐╎◡̈⃝🌷❯ /anydownloader ↜ تحميل فيديوهات متعدده
+❐╎◡̈⃝🌷❯ /saveweb ↜ تحميل ملفات من أي موقع  
+❐╎◡̈⃝🌷❯ /film ↜ جلب معلومات اي فيلم
+❐╎◡̈⃝🌷❯ /ytmp4 ↜ تحميل فيديوهات يوتيوب بالرابط  
+❐╎◡̈⃝🌷❯ /yt ↜ تحميل فيد من بوت احطياتي
+❐╎◡̈⃝🌷❯ /tts ↜ تحويل نص لصوت  
+❐╎◡̈⃝🌷❯ /headers ↜ جلب هيدر المواقع  
+ ┗━━━━━━━━━━⬣
+`;
+  await ctx.replyWithPhoto("https://files.catbox.moe/omtrli.png", {
+    caption: text,
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: [[{ text: "‹ 𝗕𝗮𝗰𝗸", callback_data: "back" }]] }
+  });
+});
+
+// 🟢 DOWNLOAD MENU
+bot.action("dev_menu", async (ctx) => {
+  await ctx.deleteMessage();
+  const text = `
+<b>🌷 DEVELOPER MENU 🌷</b>
+  ┏━━⊜
+❐╎◡̈⃝🧑‍💻❯ /join ↜ تدخيل البوت الجروبات 
+❐╎◡̈⃝🧑‍💻❯ /out ↜ خروج البوت ب أمر من المطور 
+❐╎◡̈⃝🧑‍💻❯ /up ↜ رفع المطور ادمن إذا كان البوت ادمن
+❐╎◡̈⃝🧑‍💻❯ /ban ↜ تبنيد المستخدم
+❐╎◡̈⃝🧑‍💻❯ /unban ↜ رفع التبنيد عن المستخدم
+❐╎◡̈⃝🧑‍💻❯ /gr ↜ الجروبات الي البوت فيها
+ ┗━━━━━━━━━━⬣
+`;
+  await ctx.replyWithPhoto("https://files.catbox.moe/eb7wk8.jpg", {
+    caption: text,
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: [[{ text: "‹ 𝗕𝗮𝗰𝗸", callback_data: "back" }]] }
+  });
+});
+// 🟢 DOWNLOAD MENU
+bot.action("ad_menu", async (ctx) => {
+  await ctx.deleteMessage();
+  const text = `
+<b>🌷 AUDIO MENU 🌷</b>
+  ┏━━⊜
+❐╎◡̈⃝🎧❯ /deep ↜ صوت عميق 
+❐╎◡̈⃝🎧❯ /crushed ↜ صوت منفوخ
+❐╎◡̈⃝🎧❯ /fat ↜ صوت تخين
+❐╎◡̈⃝🎧❯ /loud ↜ صوت صاخب
+❐╎◡̈⃝🎧❯ /fast ↜ صوت سريع
+❐╎◡̈⃝🎧❯ /fatter ↜ صوت تخيينن
+❐╎◡̈⃝🎧❯ /robot ↜ صوت روبوت
+❐╎◡̈⃝🎧❯ /slow ↜ صوت بطئ
+❐╎◡̈⃝🎧❯ /thin ↜ صوت رفيع
+❐╎◡̈⃝🎧❯ /reverse ↜ صوت تقطيع
+❐╎◡̈⃝🎧❯ /soft ↜ صوت ناعم 
+❐╎◡̈⃝🎧❯ /chipmunk ↜ صوت سنجاب 
+ ┗━━━━━━━━━━⬣
+`;
+  await ctx.replyWithPhoto("https://files.catbox.moe/omtrli.png", {
+    caption: text,
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: [[{ text: "‹ 𝗕𝗮𝗰𝗸", callback_data: "back" }]] }
+  });
+});
+
+// 🟢 IMG MENU
+bot.action("img_menu", async (ctx) => {
+  await ctx.deleteMessage();
+  const text = `
+<b>🌷 IMG MENU 🌷</b>
+  ┏━━⊜
+❐╎◡̈⃝📷❯ /flix ↜ صنع صور بالوصف  
+❐╎◡̈⃝📷❯ /hd ↜ تحسين جودة الصور  
+❐╎◡̈⃝📷❯ /rmbg ↜ حذف خلفيه الصوره
+❐╎◡̈⃝📷❯ /buti ↜ 22 وظيفه لتحسين الصور
+❐╎◡̈⃝📷❯ /blur ↜ بكسلة الصور  
+❐╎◡̈⃝📷❯ /zengy ↜ تزنيج الاشخاص
+❐╎◡̈⃝📷❯ /dado ↜ خلفيات منوعه
+❐╎◡̈⃝📷❯ /deep_fanta ↜صنع صور بطرق مختلفه
+❐╎◡̈⃝📷❯ /deep_siber ↜ صنع صور من المستقبل
+❐╎◡̈⃝📷❯ /deep_real ↜ صنع صور حقيقيه
+❐╎◡̈⃝📷❯ /enhance ↜ تحسين الجوده
+❐╎◡̈⃝📷❯ /restore ↜ اصلاح الصور القديمه
+❐╎◡̈⃝📷❯ /colorize ↜ تلوين الصور
+❐╎◡̈⃝📷❯ /upscale ↜ تكبير الصوره
+❐╎◡̈⃝📷❯ /removebg ↜ حذف الخلفيه
+❐╎◡̈⃝📷❯ /hijab ↜ تلبيس الشخصيه حجاب
+ ┗━━━━━━━━━━⬣
+`;
+  await ctx.replyWithPhoto("https://files.catbox.moe/omtrli.png", {
+    caption: text,
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: [[{ text: "‹ 𝗕𝗮𝗰𝗸", callback_data: "back" }]] }
+  });
+});
+
+// 🟢 USERS MENU
+bot.action("users_menu", async (ctx) => {
+  await ctx.deleteMessage();
+  const text = `
+<b>🌷 USERS MENU 🌷</b>
+  ┏━━⊜
+❐╎◡̈⃝🧍❯ /report ↜ إرسال بلاغات للمطور  
+❐╎◡̈⃝🧍❯ /my_pro ↜ معلومات حسابك  
+❐╎◡̈⃝🧍❯ /owner ↜ الوصول للمطور  
+❐╎◡̈⃝🧍❯ /my_msg ↜ يحسب عدد رسائلك
+❐╎◡̈⃝🧍❯ /total ↜ يحسب عدد رسائل المجموعه
+❐╎◡̈⃝🧍❯ /sign ↜ يجيب برجك
+ ┗━━━━━━━━━━⬣
+`;
+  await ctx.replyWithPhoto("https://files.catbox.moe/omtrli.png", {
+    caption: text,
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: [[{ text: "‹ 𝗕𝗮𝗰𝗸", callback_data: "back" }]] }
+  });
+});
+// 🟢 USERS MENU
+bot.action("deen_menu", async (ctx) => {
+  await ctx.deleteMessage();
+  const text = `
+<b>🌷 DEEN MENU 🌷</b>
+  ┏━━⊜
+❐╎◡̈⃝🕋❯ /salah ↜ يجيب مواعيد الصلاه
+❐╎◡̈⃝🕋❯ /astghfar↜ يجبلك استغفارات
+❐╎◡̈⃝🕋❯ /ahades ↜ يجيب احاديث 
+❐╎◡̈⃝🕋❯ /quran ↜ يجيب القران بصوت ياسر الدوسري
+❐╎◡̈⃝🕋❯ /ayatkursi يجيب ايه الكرسي
+ ┗━━━━━━━━━━⬣
+`;
+  await ctx.replyWithPhoto("https://files.catbox.moe/omtrli.png", {
+    caption: text,
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: [[{ text: "‹ 𝗕𝗮𝗰𝗸", callback_data: "back" }]] }
+  });
+});
+
+// 🟢 AI MENU
+bot.action("ai_menu", async (ctx) => {
+  await ctx.deleteMessage();
+  const text = `
+<b>🌷 AI MENU 🌷</b>
+  ┏━━⊜
+❐╎◡̈⃝📱❯ /gpt ↜ موديل GPT-4  
+❐╎◡̈⃝📱❯ /gpt_pro ↜ موديل برو  
+❐╎◡̈⃝📱❯ /ai_1 ↜ ذكاء اصطناعي فرعي  
+❐╎◡̈⃝📱❯ /ai_pro ↜ ذكاء برو  
+❐╎◡̈⃝📱❯ /lima ↜ موديل ليما  
+❐╎◡̈⃝📱❯ /franso ↜ موديل فرنساوي  
+❐╎◡̈⃝📱❯ /claud ↜ موديل سحابي  
+❐╎◡̈⃝📱❯ /gemini ↜ جوجل جيميناي  
+❐╎◡̈⃝📱❯ /deepseek ↜ ديب سيك  
+ ┗━━━━━━━━━━⬣
+`;
+  await ctx.replyWithPhoto("https://files.catbox.moe/omtrli.png", {
+    caption: text,
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: [[{ text: "‹ 𝗕𝗮𝗰𝗸", callback_data: "back" }]] }
+  });
+});
+
+// 🟢 FUN MENU
+bot.action("fun_menu", async (ctx) => {
+  await ctx.deleteMessage();
+  const text = `
+<b>🌷 FUN MENU 🌷</b>
+  ┏━━⊜
+❐╎◡̈⃝🕹️❯ /xo ↜ لعبة اكس أو  
+❐╎◡̈⃝🕹️❯ /bald ↜ لجعل اي شخص في صور اصلع
+❐╎◡̈⃝🕹️❯ /love ↜ تمنشن علي شخص و ترتبط بيه
+❐╎◡̈⃝🕹️❯ /taxi ↜ لعبه تاكسي
+❐╎◡̈⃝🕹️❯ /clac ↜ حسبه اي مساله معقده
+❐╎◡̈⃝🕹️❯ /die ↜ تخمين موتك
+❐╎◡̈⃝🕹️❯ /lover ↜ يجوزك وحده عشوائي
+❐╎◡̈⃝🕹️❯ /personality ↜ تحليل الشخصيه 
+❐╎◡̈⃝🕹️❯ /friends ↜ يختار الاتنين يكونو صحاب
+❐╎◡̈⃝🕹️❯ /ship ↜ يقيس نسبه حب طرفين 
+❐╎◡̈⃝🕹️❯ /mary ↜ زواج شخصين من جروب
+❐╎◡̈⃝🕹️❯ /divorce ↜ طلاق شخصين من جروب
+❐╎◡̈⃝🕹️❯ /marry_me ↜ بزوجك شخص عشوائي
+❐╎◡̈⃝🕹️❯ /mem ↜ جلب ميمز
+ ┗━━━━━━━━━━⬣
+`;
+  await ctx.replyWithPhoto("https://files.catbox.moe/omtrli.png", {
+    caption: text,
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: [[{ text: "‹ 𝗕𝗮𝗰𝗸", callback_data: "back" }]] }
+  });
+});
+// 🟢 CON MENU
+bot.action("convertion_menu", async (ctx) => {
+  await ctx.deleteMessage();
+  const text = `
+<b>🌷 CONVERTION MENU 🌷</b>
+  ┏━━⊜
+❐╎◡̈⃝👀❯ /to_vid ↜ تحويل من استيك الي فيديو  
+❐╎◡̈⃝👀❯ /to_mp3 ↜ تحويل من فيد الي صوت
+❐╎◡̈⃝👀❯ /to_img ↜ تحويل من استيكر الي صوره
+❐╎◡̈⃝👀❯ /to_url ↜ تحويل اي شئ لي رابط
+❐╎◡̈⃝👀❯ /photo2anime ↜ تحويل الصور لانمي
+ ┗━━━━━━━━━━⬣
+`;
+  await ctx.replyWithPhoto("https://files.catbox.moe/omtrli.png", {
+    caption: text,
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: [[{ text: "‹ 𝗕𝗮𝗰𝗸", callback_data: "back" }]] }
+  });
+});
+
+// 🟢 زر الرجوع
+
+bot.action("back", async (ctx) => {
+  try {
+    await ctx.deleteMessage();
+  } catch (e) {
+    console.log("🌷 مش قادر أحذف الرسالة:", e.message);
+  }
+
+  const uptime = clockString(process.uptime() * 100000);
+const text = 
+ `\`\`\`
+┏━----╼━━╃⌬〔🌷〕⌬╄━━╾---━┓
+┇ 𝙱𝙾𝚃 𝙽𝙰𝙼𝙴 : 𝑵𝒂𝒅𝒐𝒔𝒉𝒂 & Tulip BoT
+┇ 𝚅𝙴𝚁𝚂𝙸𝙾𝙽 : 1.0
+┇ 𝚁𝚄𝙽𝚃𝙸𝙼𝙴 : ${uptime}
+┗━----╼━━╃⌬〔🌷〕⌬╄━━╾---━┛
+
+┏━---╼━━╃⌬〔🌷〕⌬╄━━╾---━┓
+┇ [ select on botton ]
+┗━---╼━━╃⌬〔🌷〕⌬╄━━╾---━┛
+\`\`\``
+
+  const mainKeyboard = {
+    inline_keyboard: [
+    [
+      { text: "『 FLAGS MENU🌷 』", callback_data: "flags_menu" },
+      { text: "『 DOWNLOAD🌷 』", callback_data: "download_menu" }
+    ],
+	  [
+       
+      { text: "『  AUDIO MENU🌷 』", callback_data: "ad_menu" }
+      ],
+    [
+      { text: "『 IMG MENU🌷 』", callback_data: "img_menu" },
+      { text: "『 USERS MENU🌷 』", callback_data: "users_menu" }
+    ],
+    [
+        
+            { text: "『 DEEN MENU🌷 』", callback_data: "deen_menu" }
+      ],
+    [
+      { text: "『 AI MENU🌷 』", callback_data: "ai_menu" },
+      { text: "『 FUN MENU🌷 』", callback_data: "fun_menu" }
+    ],
+    	  
+  ]
+  };
+
+  await ctx.replyWithPhoto("https://files.catbox.moe/omtrli.png", {
+    caption: text,
+    parse_mode: "HTML",
+    reply_markup: mainKeyboard
+  });
+});
+
+// أمر اعفاء الأدمن
+bot.command("demote", async (ctx) => {
+  try {
+    const reply = ctx.message.reply_to_message;
+    if (!reply) {
+      return ctx.reply(
+        `『‹⌗› قـم بـرد عـلـي الـرسـالـه او @مـنـشـنـه لـكـي يـتـم خـفـضـه 🌷』`
+      );
+    }
+
+    const userId = reply.from.id;
+    const chatId = ctx.chat.id;
+
+    // محاولة اعفاء الأدمن
+    await ctx.telegram.promoteChatMember(chatId, userId, {
+      can_manage_chat: false,
+      can_post_messages: false,
+      can_edit_messages: false,
+      can_delete_messages: false,
+      can_manage_video_chats: false,
+      can_restrict_members: false,
+      can_promote_members: false,
+      can_change_info: false,
+      can_invite_users: false,
+      can_pin_messages: false,
+    });
+
+    await ctx.reply(
+      `┏━╼━━╃⌬〔 🌷 〕⌬╄━━╾━┓
+       ┇ 🌷 المستخدم: [${firstName}](tg://user?id=${userId})
+       ┇ 🌷 تم عزله من منصب المشرف!
+       ┇ 🌷 بقرار من: [${adminName}](tg://user?id=${adminId})
+       ┇ 🌷 القوة العظمى تتطلب مسؤولية عظيمة! 🕸️
+       ┗━╼━━╃⌬〔🌷〕⌬╄━━╾━┛`,
+      { parse_mode: "Markdown" }
+    );
+  } catch (e) {
+    console.error(e);
+    ctx.reply("حصل خطاء 🌷🌷");
+  }
+});
+
+
+// plugin by noureddine ouafy 
+// scrape by malik 
+
+
+// Helper delay
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// دالة الترجمة
+const translateText = async (text) => {
+  try {
+    const res = await axios.get(
+      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
+        text
+      )}&langpair=ar|en`
+    );
+    return res.data.responseData.translatedText;
+  } catch (error) {
+    console.error("❗️ خطأ في الترجمة:", error);
+    return text;
+  }
+};
+
+// =============== AiLabs Class ===============
+class AiLabs {
+  constructor() {
+    this.api = {
+      base: "https://text2video.aritek.app",
+      endpoints: {
+        generate: "/txt2videov3",
+        video: "/video",
+      },
+    };
+    this.headers = {
+      "user-agent": "NB Android/1.0.0",
+      "accept-encoding": "gzip",
+      "content-type": "application/json",
+      authorization: "",
+    };
+    this.state = { token: null };
+    this.setup = {
+      cipher:
+        "hbMcgZLlzvghRlLbPcTbCpfcQKM0PcU0zhPcTlOFMxBZ1oLmruzlVp9remPgi0QWP0QW",
+      shiftValue: 3,
+    };
+  }
+
+  dec(text, shift) {
+    return [...text]
+      .map((c) =>
+        /[a-z]/.test(c)
+          ? String.fromCharCode(
+              ((c.charCodeAt(0) - 97 - shift + 26) % 26) + 97
+            )
+          : /[A-Z]/.test(c)
+          ? String.fromCharCode(
+              ((c.charCodeAt(0) - 65 - shift + 26) % 26) + 65
+            )
+          : c
+      )
+      .join("");
+  }
+
+  async decrypt() {
+    if (this.state.token) return this.state.token;
+    const input = this.setup.cipher;
+    const shift = this.setup.shiftValue;
+    const decrypted = this.dec(input, shift);
+    this.state.token = decrypted;
+    this.headers.authorization = decrypted;
+    return decrypted;
+  }
+
+  deviceId() {
+    return Array.from({ length: 16 }, () =>
+      Math.floor(Math.random() * 16).toString(16)
+    ).join("");
+  }
+
+  async txt2vid({ prompt, isPremium = 1 }) {
+    try {
+      if (!prompt?.trim())
+        return { success: false, error: "Prompt cannot be empty" };
+
+      await this.decrypt();
+      const payload = {
+        deviceID: this.deviceId(),
+        isPremium,
+        prompt,
+        used: [],
+        versionCode: 59,
+      };
+      const url = this.api.base + this.api.endpoints.generate;
+      const response = await axios.post(url, payload, { headers: this.headers });
+      const { code, key } = response.data;
+      if (code !== 0 || !key)
+        return { success: false, error: "Failed to get video generation key" };
+      return { success: true, data: { task_id: key } };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message || "An unknown error occurred",
+      };
+    }
+  }
+
+  async status({ task_id }) {
+    try {
+      if (!task_id)
+        return { success: false, error: "Invalid task_id provided" };
+      await this.decrypt();
+      const payload = { keys: [task_id] };
+      const url = this.api.base + this.api.endpoints.video;
+      const response = await axios.post(url, payload, {
+        headers: this.headers,
+        timeout: 2000000,
+      });
+      const { code, datas } = response.data;
+      if (code === 0 && Array.isArray(datas) && datas.length > 0) {
+        const data = datas[0];
+        if (data.url && data.url.trim() !== "") {
+          return {
+            success: true,
+            data: {
+              status: "completed",
+              url: data.url.trim(),
+              progress: "100%",
+            },
+          };
+        }
+        const progress = parseFloat(data.progress || 0);
+        return {
+          success: true,
+          data: {
+            status: "processing",
+            progress: `${Math.round(progress)}%`,
+          },
+        };
+      }
+      return { success: false, error: "Invalid response from server" };
+    } catch (error) {
+      return { success: false, error: error.message || "Status check failed" };
+    }
+  }
+}
+
+// =============== Telegraf Bot ===============
+
+
+bot.command(["veo", "vo2"], async (ctx) => {
+  const text = ctx.message.text.replace(/\/(veo|vo2)\s*/, "");
+
+  if (!text) {
+    return ctx.reply(
+      "❌ لازم تكتب وصف للفيديو.\n\nمثال:\n`/veo مدينة مستقبلية عند الغروب`",
+      { parse_mode: "Markdown" }
+    );
+  }
+
+  // لو النص عربي → ترجمة
+  let prompt = text;
+  if (/[\u0600-\u06FF]/.test(text)) {
+    const translated = await translateText(text);
+    await ctx.reply(
+      `🌐 تم الترجمة من العربي → الإنجليزي:\n\`${translated}\``,
+      { parse_mode: "Markdown" }
+    );
+    prompt = translated;
+  }
+
+  const ai = new AiLabs();
+  await ctx.reply("🎬 جاري إنشاء الفيديو... العملية قد تستغرق عدة دقائق.");
+
+  const initialTask = await ai.txt2vid({ prompt });
+  if (!initialTask.success) {
+    return ctx.reply(`❌ فشل بدء إنشاء الفيديو.\n*السبب:* ${initialTask.error}`, {
+      parse_mode: "Markdown",
+    });
+  }
+
+  const taskId = initialTask.data.task_id;
+  let lastProgress = "";
+
+  for (let i = 0; i < 60; i++) {
+    await delay(10000);
+    const statusResult = await ai.status({ task_id: taskId });
+
+    if (!statusResult.success) {
+      await ctx.reply(`⚠️ خطأ أثناء الفحص: ${statusResult.error}`);
+      return;
+    }
+
+    if (statusResult.data.status === "completed") {
+      await ctx.reply("✅ تم إنشاء الفيديو!");
+      try {
+        await ctx.replyWithVideo(
+          { url: statusResult.data.url },
+          { caption: `*Prompt:* ${text}`, parse_mode: "Markdown" }
+        );
+      } catch {
+        await ctx.reply(
+          `⚠️ لم أستطع رفع الفيديو كتليجرام.\n🔗 حمله من هنا: ${statusResult.data.url}`
+        );
+      }
+      return;
+    }
+
+    if (statusResult.data.progress !== lastProgress) {
+      lastProgress = statusResult.data.progress;
+      await ctx.reply(`⏳ جاري معالجة الفيديو... *${lastProgress}*`, {
+        parse_mode: "Markdown",
+      });
+    }
+  }
+
+  await ctx.reply("⏰ انتهى الوقت ولم يكتمل إنشاء الفيديو.");
+});
+
+// Start b
+
+
+
+// دالة أساسية لمعالجة الصورة
+async function processImage(ctx, tool) {
+  if (!ctx.message.reply_to_message || !ctx.message.reply_to_message.photo) {
+    return ctx.reply(`🖼️ لازم ترد على صورة وتكتب: /${tool}`);
+  }
+
+  try {
+    ctx.reply("⏳ جاري معالجة الصورة...");
+
+    // تحميل الصورة من تليجرام
+    const fileId = ctx.message.reply_to_message.photo.slice(-1)[0].file_id;
+    const fileLink = await ctx.telegram.getFileLink(fileId);
+    const imgRes = await axios.get(fileLink.href, { responseType: "arraybuffer" });
+    const buffer = Buffer.from(imgRes.data);
+
+    // رفع الصورة على API
+    const form = new FormData();
+    form.append("file", buffer, `${Date.now()}.jpg`);
+    form.append("type", tool);
+
+    const res = await axios.post("https://imagetools.rapikzyeah.biz.id/upload", form, {
+      headers: form.getHeaders(),
+    });
+
+    const $ = cheerio.load(res.data);
+    const resultUrl = $("img#memeImage").attr("src");
+
+    if (!resultUrl) {
+      return ctx.reply("❌ مفيش نتيجة من السيرفر.");
+    }
+
+    // إرسال النتيجة
+    await ctx.replyWithPhoto({ url: resultUrl });
+  } catch (e) {
+    console.error(e);
+    ctx.reply(`❌ Error: ${e.message}`);
+  }
+}
+
+// أوامر منفصلة
+bot.command("removebg", (ctx) => processImage(ctx, "removebg"));
+bot.command("enhance", (ctx) => processImage(ctx, "enhance"));
+bot.command("upscale", (ctx) => processImage(ctx, "upscale"));
+bot.command("restore", (ctx) => processImage(ctx, "restore"));
+bot.command("colorize", (ctx) => processImage(ctx, "colorize"));
+
+const antiPrivate = true;
+
+let blockedUsers = new Set(); // المستخدمين المحظورين
+
+bot.use(async (ctx, next) => {
+  try {
+    // لو المستخدم محظور => تجاهل
+    if (blockedUsers.has(ctx.from.id)) return;
+
+    // لو الرسالة جروب => كمل
+    if (ctx.chat.type !== "private") return next();
+
+    // لو مفيش رسالة (حالة نادرة) => تجاهل
+    if (!ctx.message) return;
+
+    // استثناء أوامر معينة
+    const skipWords = ["owner"];
+    if (skipWords.some((word) => ctx.message.text?.toLowerCase().includes(word))) {
+      return next();
+    }
+
+    // خاص + antiPrivate مفعلة + المرسل مش Owner
+    /*if (antiPrivate && !owners.includes(String(ctx.from.id))) {
+      await ctx.replyWithMarkdown(
+        `*[🌷] مرحبًا ${ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name}*\n\n` +
+          `🚫 يُمنع استخدام البوت في الخاص، ولهذا السبب تم حظرك من استخدامه.\n\n` +
+          `✅ جرّب البوت داخل جروب الدعم:\n👉 https://t.me/Terbo888xxx`
+      );
+
+      // نضيف المستخدم للقائمة السوداء
+      blockedUsers.add(ctx.from.id);
+      return;
+    }*/
+
+    return next();
+  } catch (e) {
+    console.error("AntiPrivate Error:", e);
+    return next();
+  }
+});
+//==============
+bot.command('play', async (ctx) => {
+  try {
+    const query = ctx.message.text.split(' ').slice(1).join(' ');
+    if (!query) return ctx.reply('🌷 اكتب اسم الأغنية أو رابط يوتيوب');
+
+    const search = await yts(query);
+    if (!search.videos.length) return ctx.reply('🌷 مفيش نتائج!');
+
+    const video = search.videos[0];
+    const caption = `
+     ┇≡ ◡̈⃝🧛‍♂️↜『معلومـات الـمقـطـع』↶
+┏━╼━━╃⌬〔🎧〕⌬╄━━╾━┓
+┇≡ ◡̈⃝🎶↜ الـعـنـوان ↞『 ${video.title} 』
+┇≡ ◡̈⃝📺↜ الـقـنـاة ↞『 ${video.author.name} 』
+┇≡ ◡̈⃝⏱️↜ الـمـدة ↞『 ${video.timestamp} 』
+┇≡ ◡̈⃝👁️↜ المـشـاهدات ↞『 ${video.views.toLocaleString()} 』
+┇≡ ◡̈⃝📅↜ تـاريـخ الـنـشـر ↞『 ${video.ago} 』
+┗━╼━━╃⌬〔🔥〕⌬╄━━╾━┛
+> ◡̈⃝🌷↜ استعد لسماع شيء رائع! 🎧
+    `.trim();
+
+    await ctx.replyWithPhoto(video.thumbnail, { caption, parse_mode: "Markdown" });
+    const api = await yta(video.url);
+    if (api.status) await ctx.replyWithAudio({ url: api.result.download }, { title: api.result.title });
+
+  } catch (e) {
+    console.error(e);
+    ctx.reply('❌ حصل خطأ أثناء البحث.');
+  }
+});
+//============
+
+// دالة عشوائية
+function pickRandom(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+// ---------------------- الأوامر ----------------------
+
+bot.command("friends", (ctx) => {
+  ctx.reply(`🔰 يلا نعمل صداقات 🔰\n\nيا @${ctx.from.username || ctx.from.id} كلم واحد من الجروب وخليكم صحاب 🙆\n\n👀 أحلى صداقات بتبدأ بلعبة 😉`);
+});
+
+bot.command("lover", (ctx) => {
+  ctx.reply(`💍 يا @${ctx.from.username || ctx.from.id} اتجوزت واحد عشوائي من الجروب 😍💓 مبروك!`);
+});
+
+bot.command("personality", (ctx) => {
+  const text = ctx.message.text.split(" ").slice(1).join(" ");
+  if (!text) return ctx.reply("📌 اكتب اسم الشخص مثل: /personalidad محمد");
+  const personalidad = `
+┏━━°❀❬ *تحليل شخصية* ❭❀°━━┓
+┃• الاسم : ${text}
+┃• طيبة : ${pickRandom(['20%','40%','60%','80%','100%'])}
+┃• شجاعة : ${pickRandom(['10%','30%','50%','70%','90%'])}
+┃• قوة : ${pickRandom(['ضعيف','متوسط','قوي','خارق'])}
+┃• نوع : ${pickRandom(['طيب','شايل هم','كيوت','مستفز','عصبي'])}
+┗━━━━━━━━━━━━━
+`;
+  ctx.reply(personalidad);
+});
+
+bot.command("ship", (ctx) => {
+  const args = ctx.message.text.split(" ").slice(1);
+  if (args.length < 2) return ctx.reply("⚠️ لازم تكتب اسمين\nمثال: /ship أحمد منى");
+  let [name1, name2] = args;
+  let love = `❤️ نسبة الحب بين *${name1}* و *${name2}* هي: *${Math.floor(Math.random() * 100)}%* 👩🏻‍❤️‍👨🏻`;
+  ctx.reply(love, { parse_mode: "Markdown" });
+});
+
+bot.command("top", (ctx) => {
+  const text = ctx.message.text.split(" ").slice(1).join(" ");
+  if (!text) return ctx.reply("📌 لازم تكتب الموضوع\nمثال: /top الكسالى");
+  let top = `🏆 توب 10 ${text} 🏆\n\n`;
+  for (let i = 1; i <= 10; i++) {
+    top += `${i}. عضو عشوائي من الجروب 😂\n`;
+  }
+  ctx.reply(top);
+});
+
+bot.command("topgays", (ctx) => {
+  let top = `🌈 TOP 10 مضحك 🌈\n\n`;
+  for (let i = 1; i <= 10; i++) {
+    top += `${i}. عضو عشوائي 🏳️‍🌈\n`;
+  }
+  ctx.reply(top);
+});
+
+
+
+bot.command("delete", async (ctx) => {
+  const chatId = ctx.chat.id;
+  const userId = ctx.from.id;
+
+  // لازم جروب
+  if (ctx.chat.type !== "supergroup" && ctx.chat.type !== "group") {
+    return ctx.reply("❌ الأمر يشتغل في الجروبات فقط");
+  }
+
+  // لازم ريبلاي
+  if (!ctx.message.reply_to_message) {
+    return ctx.reply("🌷 لازم تعمل ريبلاي على الرسالة اللي عايز تمسحها");
+  }
+
+  // جلب معلومات العضو
+  const member = await ctx.telegram.getChatMember(chatId, userId);
+
+  // ✅ هنا عرفنا isOwner
+  const isOwner = OWNER_ID.includes(String(userId)) || DEVELOPERS.includes(String(userId));
+  const isAdminOrCreator =
+    member.status === "administrator" || member.status === "creator";
+
+  if (!isOwner && !isAdminOrCreator) {
+    return ctx.reply("❌ الأمر مسموح فقط للادمنز أو المطورين أو منشئ الجروب");
+  }
+
+  try {
+    // مسح الرسالة اللي معمول لها ريبلاي
+    await ctx.deleteMessage(ctx.message.reply_to_message.message_id);
+    // مسح أمر /delete نفسه
+    await ctx.deleteMessage(ctx.message.message_id);
+  } catch (err) {
+    console.error(err);
+    ctx.reply("🌷 مش قادر أمسح الرسالة، احتمال مافيش صلاحيات كافية (لازم البوت يكون أدمن).");
+  }
+});
+
+// أمر آية الكرسي
+bot.command(["ayatkursi", "اية", "اية_الكرسي"], async (ctx) => {
+  const caption = `
+『ايه الكرسي🥹💘』
+
+『اللَّهُ لَا إِلَهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ لَا تَأْخُذُهُ سِنَةٌ وَلَا نَوْمٌ لَهُ مَا فِي السَّمَاوَاتِ وَمَا فِي الْأَرْضِ مَنْ ذَا الَّذِي يَشْفَعُ عِنْدَهُ إِلَّا بِإِذْنِهِ يَعْلَمُ مَا بَيْنَ أَيْدِيهِمْ وَمَا خَلْفَهُمْ وَلَا يُحِيطُونَ بِشَيْءٍ مِنْ عِلْمِهِ إِلَّا بِمَا شَاءَ وَسِعَ كُرْسِيُّهُ السَّمَاوَاتِ وَالْأَرْضَ وَلَا يَئُودُهُ حِفْظُهُمَا وَهُوَ الْعَلِيُّ الْعَظِيمُ』
+`.trim();
+
+  // يبعث النص
+  await ctx.reply(caption, { parse_mode: "Markdown" });
+
+  // يبعث آية الكرسي صوتية
+  await ctx.replyWithAudio(
+    { url: "https://files.catbox.moe/vd9rvk.aac" },
+    {
+      title: "آية الكرسي",
+      performer: "القرآن الكريم",
+    }
+  );
+});
+
+
+
+// دالة الترجمة (عربي → إنجليزي
+
+// أوامر متعددة: /animeimage أو /انمي أو /صورةانمي
+bot.command(["animeimage", "انمي", "صورةانمي"], async (ctx) => {
+  const text = ctx.message.text.split(" ").slice(1).join(" ");
+  if (!text) {
+    return ctx.reply("📝✦ من فضلك أدخل وصف الصورة بعد الأمر، مثل:\n/animeimage فتاة أنمي تقف تحت المطر");
+  }
+
+  await ctx.reply("⌛ يتم تحميل طلبك...");
+
+  try {
+    let prompt = text.trim();
+    if (/[\u0600-\u06FF]/.test(prompt)) {
+      prompt = await translateToEnglish(prompt);
+    }
+
+    const url = `https://api.takamura.site/api/ai/animeimage?prompt=${encodeURIComponent(prompt)}`;
+    const { data } = await axios.get(url);
+
+    if (!data.status || !data.image) {
+      return ctx.reply("❌ لم أستطع إنشاء الصورة، حاول مجددًا.");
+    }
+
+    const buffer = Buffer.from(data.image.split(",")[1], "base64");
+
+    await ctx.replyWithPhoto({ source: buffer }, {
+      caption: `🎨✦ *تم الإنشاء بواسطة الذكاء الاصطناعي*\n\n📝 الوصف: ${text}\n🌐 EN: ${prompt}`
+    });
+  } catch (err) {
+    console.error(err);
+    ctx.reply("❌✦ حدث خطأ أثناء توليد الصورة.");
+  }
+});
+
+// ردود جاهزة (قلب، حب، هزار، شتايم)
+
+
+// دالة لتحويل المدة لصيغة أيام/ساعات/دقايق/ثواني
+
+// أمر join
+bot.command(["join", "ادخل"], async (ctx) => {
+  const userId = String(ctx.from.id);
+  const userName = ctx.from.first_name;
+
+  // تحقق من المطور أو المالك
+  if (!OWNER_ID.includes(userId) && !DEVELOPERS.includes(userId)) {
+    return ctx.replyWithMarkdown(
+      `🌷 هذا الأمر مخصص للمطور فقط!\n\n المستخدم: [${userName}](tg://user?id=${userId})`
+    );
+  }
+
+  const args = ctx.message.text.split(" ").slice(1);
+  const inviteLink = args[0];
+  const days = args[1];
+
+  if (!inviteLink) {
+    return ctx.reply(`📌 أرسل رابط الجروب مثل:\n/join <الرابط> <الأيام>`);
+  }
+  if (!/https:\/\/t\.me\/\+/.test(inviteLink)) {
+    return ctx.reply(`❌ الرابط غير صالح! لازم يكون رابط دعوة تليجرام.`);
+  }
+  if (!days) {
+    return ctx.reply(`📌 حدد عدد الأيام مثل:\n/join <الرابط> 2`);
+  }
+  if (isNaN(days)) {
+    return ctx.reply(`✖ يجب كتابة عدد الأيام كرقم فقط!`);
+  }
+
+  const nDays = 86400000 * Number(days);
+  const expireTime = msToDate(nDays);
+
+  await ctx.reply("😎 جاري الانضمام إلى المجموعة خلال 3 ثوانٍ...");
+  await new Promise((res) => setTimeout(res, 3000));
+
+  try {
+    // الانضمام للجروب
+    const chat = await ctx.telegram.joinChat(inviteLink);
+    const groupId = chat.id;
+    const groupName = chat.title;
+
+    // رسالة في الجروب
+    await ctx.telegram.sendMessage(
+      groupId,
+      `✅ تم الانضمام بنجاح\n\n📛 اسم المجموعة: ${groupName}\n⏳ مدة البقاء: ${expireTime}`,
+      { parse_mode: "Markdown" }
+    );
+
+    await new Promise((res) => setTimeout(res, 2000));
+
+    await ctx.telegram.sendMessage(
+      groupId,
+      `🏮 مرحباً بالجميع!\nتمت دعوتي بواسطة ${userName}`,
+      { parse_mode: "Markdown" }
+    );
+
+    await new Promise((res) => setTimeout(res, 7000));
+
+    await ctx.telegram.sendMessage(groupId, "🤭 فليهدأ الجميع!");
+
+    // رسالة خاصة لكل المالكين
+    for (const owner of OWNER_ID) {
+      await ctx.telegram.sendMessage(
+        owner,
+        `⚡ دعوة جروب\n\n👤 ${userName} دعاني\n\n📛 المجموعة: ${groupName}\n🆔 ID: ${groupId}\n🔗 الرابط: ${inviteLink}\n\n⏳ مدة البقاء: ${expireTime}`,
+        { parse_mode: "Markdown" }
+      );
+    }
+
+    // رسالة ترحيب بالأزرار
+    await ctx.telegram.sendMessage(
+      groupId,
+      `👋🏻 أهلاً بكم\n\nتمت دعوتي بواسطة ${userName}\n\n✧ لرؤية الأوامر اكتب:\n/الاوامر\n\n📌 سأخرج تلقائياً بعد: ${expireTime}`,
+      {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "✆ المطور", callback_data: "owner" }],
+            [{ text: "⦙☰ الأوامر", callback_data: "menu" }],
+          ],
+        },
+      }
+    );
+  } catch (err) {
+    console.error("join error:", err);
+    ctx.reply("⚠️ فشل الانضمام! قد يكون البوت بالفعل في الجروب أو الرابط منتهي.");
+  }
+});
+
+
+// أمر التثبيت
+bot.command("pin", async (ctx) => {
+  if (!ctx.message.reply_to_message) {
+    return ctx.reply("🌷 لازم ترد على رسالة عشان أثبتها.");
+  }
+  try {
+    await ctx.pinChatMessage(ctx.message.reply_to_message.message_id);
+    ctx.reply("🌷 الرسالة اتثبتت");
+  } catch (e) {
+    console.error(e);
+    ctx.reply("🌷 ماقدرتش أثبت الرسالة.");
+  }
+});
+
+// أمر إلغاء التثبيت
+bot.command("unpin", async (ctx) => {
+  try {
+    await ctx.unpinChatMessage();
+    ctx.reply("🌷 الرسالة اتشالت من التثبيت");
+  } catch (e) {
+    console.error(e);
+    ctx.reply("🌷 ماقدرتش أشيل التثبيت.");
+  }
+});
+
+// أمر تمييز (هنعمله كحفظ رسالة بالـ forward لنفس الجروب كـ مرجع)
+bot.command("destacar", async (ctx) => {
+  if (!ctx.message.reply_to_message) {
+    return ctx.reply("🌷 لازم ترد على رسالة عشان تميزها.");
+  }
+  try {
+    await ctx.forwardMessage(ctx.chat.id, ctx.chat.id, ctx.message.reply_to_message.message_id);
+    ctx.reply("🌷 الرسالة اتعلمت وموجودة كمرجع");
+  } catch (e) {
+    console.error(e);
+    ctx.reply("🌷 ماقدرتش أميز الرسالة.");
+  }
+});
+
+// أمر إلغاء التمييز (مفيش API مباشر في تليجرام)
+// ممكن نعتبره مسح الرسالة اللي اتعملها forward كمرجع
+bot.command("desmarcar", async (ctx) => {
+  ctx.reply("ℹ️ تليجرام مفيهوش إلغاء تمييز مباشر، لكن تقدر تمسح الرسالة اللي اتعلمت يدوي.");
+});
+
+// تشغيل 
+
+// دالة البحث
+async function xnxxsearch(query, page = 1) {
+  const baseurl = 'https://www.xnxx.com';
+  const url = `${baseurl}/search/${query}/${page}`;
+  try {
+    const res = await fetch(url);
+    const text = await res.text();
+    const $ = cheerio.load(text);
+    const results = [];
+
+    $('div.mozaique').each((a, b) => {
+      const thumb = $(b).find('div.thumb a');
+      const thumbUnder = $(b).find('div.thumb-under');
+      thumb.each((i, el) => {
+        const link = baseurl + $(el).attr('href').replace('/THUMBNUM/', '/');
+        const title = thumbUnder.eq(i).find('a').attr('title');
+        const info = thumbUnder.eq(i).find('p.metadata').text().trim();
+        const [author, time, resolution, views] = info
+          .split(/[\s-]+/)
+          .filter(item => item.trim() !== '');
+        results.push({ title, author, time, resolution, views, link });
+      });
+    });
+
+    return { code: 200, status: true, result: results.slice(0, 10) };
+  } catch (err) {
+    return { code: 503, status: false, result: err };
+  }
+}
+
+// دالة تحميل الفيديو
+async function xnxxdl(URL) {
+  return new Promise((resolve, reject) => {
+    fetch(`${URL}`, { method: 'get' })
+      .then((res) => res.text())
+      .then((res) => {
+        const $ = cheerio.load(res, { xmlMode: false });
+        const title = $('meta[property="og:title"]').attr('content');
+        const duration = $('meta[property="og:duration"]').attr('content');
+        const image = $('meta[property="og:image"]').attr('content');
+        const videoScript = $('#video-player-bg > script:nth-child(6)').html();
+        const files = {
+          low: (videoScript.match(/html5player.setVideoUrlLow\('(.*?)'\);/) || [])[1],
+          high: (videoScript.match(/html5player.setVideoUrlHigh\('(.*?)'\);/) || [])[1],
+        };
+        resolve({ status: 200, result: { title, URL, duration, image, files } });
+      })
+      .catch((err) => reject({ code: 503, status: false, result: err }));
+  });
+}
+
+// set bot name
+bot.command("setbotname", async (ctx) => {
+  const args = ctx.message.text.split(" ").slice(1).join(" ");
+  const chatId = ctx.chat.id;
+
+  // التحقق إنه جروب
+  if (ctx.chat.type !== "supergroup" && ctx.chat.type !== "group") {
+    return ctx.reply("🌷 هذا الأمر يعمل فقط داخل المجموعات");
+  }
+
+  // التحقق من الصلاحيات
+  const member = await ctx.telegram.getChatMember(chatId, ctx.from.id);
+  if (!["administrator", "creator"].includes(member.status)) {
+    return ctx.reply("┏━━━━━━━━━━━━━━━━⬣\n┇🔥┇ ↯ الأمر الادمن بس \n❐⊹━━━━━『𝙎𝙋𝘼𝙈』━━━━━⊹❐\n┇🌷┇ ↯ انتا مجرد عضو \n┗━━━━━━━━━━━━━━━━⬣");
+  }
+
+  if (!args) {
+    return ctx.reply("🌷 اكتب الاسم الجديد للبوت\nمثال: /setbotname MyTelegramBot");
+  }
+
+  try {
+    await ctx.telegram.setMyName(args);
+    ctx.reply("🌷 تم تغيير اسم البوت بنجاح");
+  } catch (err) {
+    ctx.reply("❌ فشل في تغيير اسم البوت");
+  }
+});
+
+// 
+
+
+// معرفات المطورين
+const DEVELOPERS = [2012345678, 2019876543]; // ← حط هنا IDs بتوع المطورين
+
+// أمر رفع (ارفعني)
+bot.command("up", async (ctx) => {
+  const chatId = ctx.chat.id;
+  const userId = ctx.from.id;
+  const text = ctx.message.text.split(" ").slice(1).join(" ");
+
+  try {
+    // لو كتب "المطورين"
+    if (text === "deve") {
+      if (DEVELOPERS.length === 0) {
+        return ctx.reply("❌ لم يتم العثور على أي مطورين.");
+      }
+
+      for (let devId of DEVELOPERS) {
+        try {
+          await ctx.telegram.promoteChatMember(chatId, devId, {
+            can_change_info: true,
+            can_post_messages: true,
+            can_edit_messages: true,
+            can_delete_messages: true,
+            can_invite_users: true,
+            can_restrict_members: true,
+            can_pin_messages: true,
+            can_promote_members: true,
+          });
+        } catch (err) {
+          console.error("❌ خطأ في ترقية مطور:", err);
+        }
+      }
+      return ctx.reply("✅ تم إضافة جميع المطورين وتعيينهم مشرفين بنجاح.");
+    }
+
+    // لو كتب من غير نص → ترقيته هو
+    const member = await ctx.telegram.getChatMember(chatId, userId);
+    if (["administrator", "creator"].includes(member.status)) {
+      return ctx.reply("⚠️ أنت مشرف بالفعل، لا يمكن ترقيتك مرة أخرى.");
+    }
+
+    await ctx.telegram.promoteChatMember(chatId, userId, {
+      can_change_info: true,
+      can_post_messages: true,
+      can_edit_messages: true,
+      can_delete_messages: true,
+      can_invite_users: true,
+      can_restrict_members: true,
+      can_pin_messages: true,
+      can_promote_members: true,
+    });
+
+    return ctx.reply("✅ تمت ترقيتك إلى مشرف في المجموعة بنجاح.");
+
+  } catch (error) {
+    console.error("ارفعني error:", error);
+    return ctx.reply("❌ حدث خطأ أثناء محاولة ترقيتك. تأكد أن البوت مشرف.");
+  }
+});
+
+// hidden tag (mention all)
+bot.command("ht", async (ctx) => {
+  const chatId = ctx.chat.id;
+
+  // تحقق إنه جروب
+  if (ctx.chat.type !== "supergroup" && ctx.chat.type !== "group") {
+    return ctx.reply("🌷 هذا الأمر يعمل فقط داخل المجموعات");
+  }
+
+  // تحقق إذا المرسل أدمن أو منشئ
+  const member = await ctx.telegram.getChatMember(chatId, ctx.from.id);
+  if (!["administrator", "creator"].includes(member.status)) {
+    return ctx.reply("┏━━━━━━━━━━━━━━━━⬣\n┇🔥┇ ↯ الأمر الادمن بس \n❐⊹━━━━━『𝙎𝙋𝘼𝙈』━━━━━⊹❐\n┇🌷┇ ↯ انتا مجرد عضو \n┗━━━━━━━━━━━━━━━━⬣");
+  }
+
+  try {
+    // جلب النص من الرسالة
+    const args = ctx.message.text.split(" ").slice(1).join(" ");
+    const messageText = args ? args : "صلِّ على النبي ﷺ";
+
+    // نجيب كل الأدمنز (لأن Bot API مش بيرجع كل الأعضاء)
+    const admins = await ctx.telegram.getChatAdministrators(chatId);
+
+    // نكوّن قائمة mention IDs
+    const mentionIds = admins.map((a) => a.user.id);
+
+    // إرسال الرسالة مع mentions
+    await ctx.reply(messageText, {
+      reply_to_message_id: ctx.message.message_id,
+      allow_sending_without_reply: true,
+      entities: mentionIds.map((id) => ({
+        type: "mention",
+        offset: 0,
+        length: 0,
+        user: { id },
+      })),
+    });
+
+  } catch (err) {
+    console.error("HT Error:", err);
+    ctx.reply("❌ حصل خطأ أثناء تنفيذ أمر ht");
+  }
+});
+
+
+// دالة الترجمة (عربي -> إنجليزي)
+async function translateToEnglish(text) {
+  try {
+    const res = await axios.get("https://translate.googleapis.com/translate_a/single", {
+      params: {
+        client: "gtx",
+        sl: "ar", // لغة المصدر (عربي)
+        tl: "en", // لغة الهدف (إنجليزي)
+        dt: "t",
+        q: text,
+      },
+    });
+    return res.data[0][0][0]; // النص المترجم
+  } catch (err) {
+    console.error("ترجمة فشلت:", err.message);
+    return text; // fallback: يرجع النص الأصلي لو حصل خطأ
+  }
+}
+
+async function generateDeepImage(ctx, style) {
+  const text = ctx.message.text.split(" ").slice(1).join(" ");
+
+  if (!text) {
+    return ctx.reply(
+      `📌 طريقة الاستخدام:\n/${ctx.message.text.split(" ")[0]} <الوصف>\n\nمثال:\n/${ctx.message.text.split(" ")[0]} مدينة مستقبلية ليلا\n\n💡 ستُولد الصورة بنمط ${style}.`
+    );
+  }
+
+  const promptAr = text.trim();
+  if (!promptAr) {
+    return ctx.reply(`❗ الرجاء كتابة وصف للصورة. مثال: /${ctx.message.text.split(" ")[0]} غابة سحرية`);
+  }
+
+  await ctx.reply("⏳ جارٍ ترجمة الوصف وتوليد الصورة...");
+
+  // ترجمة الوصف من عربي إلى إنجليزي
+  const promptEn = await translateToEnglish(promptAr);
+
+  const deviceId = `dev-${Math.floor(Math.random() * 1000000)}`;
+
+  try {
+    const response = await axios.post(
+      "https://api-preview.chatgot.io/api/v1/deepimg/flux-1-dev",
+      {
+        prompt: `${promptEn} -style ${style}`,
+        size: "1024x1024",
+        device_id: deviceId,
+      },
+      {
+        headers: {
+          accept: "application/json",
+          "Content-Type": "application/json",
+          Origin: "https://deepimg.ai",
+          Referer: "https://deepimg.ai/",
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        },
+      }
+    );
+
+    const data = response.data;
+    if (data?.data?.images?.length > 0) {
+      const imageUrl = data.data.images[0].url;
+      await ctx.replyWithPhoto(
+        { url: imageUrl },
+        {
+          caption: `✅ تم توليد الصورة بنجاح!\n\n📄 الوصف (عربي): ${promptAr}\n🌍 الوصف (إنجليزي): ${promptEn}\n🎨 النمط: ${style}\n\nتم توليد الصورة بواسطة deepseek.`,
+        }
+      );
+    } else {
+      ctx.reply("❌ فشل في توليد الصورة.");
+    }
+  } catch (err) {
+    console.error(err.response ? err.response.data : err.message);
+    ctx.reply("❌ حدث خطأ أثناء توليد الصورة.");
+  }
+}
+
+// 🖼️ الأوامر
+bot.command("deep_real", (ctx) => 
+generateDeepImage(ctx, "realistic"));
+bot.command("deep_siber", (ctx) => generateDeepImage(ctx, "cyberpunk"));
+bot.command("deep_fanta", (ctx) => generateDeepImage(ctx, "fantasy"));
+
+// kick all members
+bot.command("kickall", async (ctx) => {
+  const chatId = ctx.chat.id;
+
+  // تحقق إنه جروب
+  if (ctx.chat.type !== "supergroup" && ctx.chat.type !== "group") {
+    return ctx.reply("🌷 هذا الأمر يعمل فقط داخل المجموعات");
+  }
+
+  // تحقق إذا البوت أدمن
+  const me = await ctx.telegram.getChatMember(chatId, ctx.botInfo.id);
+  if (me.status !== "administrator") {
+    return ctx.reply("🌷 يجب أن أكون أدمن أولًا لكي أستطيع طرد الأعضاء");
+  }
+
+  // تحقق إذا المرسل أدمن أو منشئ
+  const member = await ctx.telegram.getChatMember(chatId, ctx.from.id);
+  if (!["administrator", "creator"].includes(member.status)) {
+    return ctx.reply("┏━━━━━━━━━━━━━━━━⬣\n┇🔥┇ ↯ الأمر الادمن بس \n❐⊹━━━━━『𝙎𝙋𝘼𝙈』━━━━━⊹❐\n┇🌷┇ ↯ انتا مجرد عضو \n┗━━━━━━━━━━━━━━━━⬣");
+  }
+
+  try {
+    // جلب كل الأعضاء
+    const admins = await ctx.telegram.getChatAdministrators(chatId);
+    const adminIds = admins.map((a) => a.user.id);
+
+    const members = await ctx.telegram.getChat(chatId);
+    if (!members || !members.members_count) {
+      return ctx.reply("🌷 لم أتمكن من جلب أعضاء المجموعة");
+    }
+
+    const kickableMembers = [];
+    for (let admin of admins) {
+      // بنجمع كل الأدمنز عشان نستثنيهم
+      kickableMembers.push(admin.user.id);
+    }
+
+    ctx.reply("🚀 جاري محاولة طرد جميع الأعضاء (عدا الأدمنز و المالك)");
+
+
+    ctx.reply("🌷 تمت العملية (لكن بوت تيليجرام الرسمي ما يقدرش يجيب كل الأعضاء إلا بالأدوات المتقدمة)");
+  } catch (err) {
+    ctx.reply("❌ حصل خطأ أثناء محاولة طرد الأعضاء");
+  }
+});
+
+// أمر /اسكربتي
+bot.command("cs", async (ctx) => {
+  const senderId = ctx.from.id.toString();
+
+  if (!developers.includes(senderId)) {
+    return ctx.reply("❌ لا يمكنك استخدام هذا الأمر");
+  }
+
+  // مسار مجلد البوت (سكرب)
+  const botFolderPath = path.resolve("./"); 
+  const zipFilePath = path.join(botFolderPath, "bot_files.zip");
+
+  await ctx.reply("📂 جاري قراءة ملفات البوت...");
+
+  try {
+    // ملفات ومجلدات يتم استثنائها
+    const excluded = [
+      "*.zip",
+      "*.tar.gz",
+      "*.tar",
+      "*.rar",
+      "*.7z",
+      "*.gz",
+      "node_modules/*",
+      ".git/*",
+      "cache/*",
+      ".cache/*",
+      ".env",
+      "user.json"
+    ];
+
+    // أمر الضغط
+    const zipCommand = `zip -r "${zipFilePath}" . -x ${excluded
+      .map((f) => `"${f}"`)
+      .join(" ")}`;
+
+    await ctx.reply("⏳ يتم الآن ضغط الملفات...");
+
+    exec(zipCommand, { cwd: botFolderPath }, async (error) => {
+      if (error) {
+        return ctx.reply(`❌ حدث خطأ: ${error.message}`);
+      }
+
+      if (!fs.existsSync(zipFilePath)) {
+        return ctx.reply("❌ لم يتم إنشاء الملف.");
+      }
+
+      await ctx.reply("✅ تم إنشاء الملف بنجاح. يتم الآن إرساله...");
+
+      // إرسال الملف
+      await ctx.replyWithDocument(
+        { source: zipFilePath, filename: "bot_files.zip" },
+      );
+
+      // حذف الملف بعد الإرسال
+      fs.unlink(zipFilePath, (err) => {
+        if (err) {
+          return ctx.reply(`⚠️ حدث خطأ أثناء حذف الملف: ${err.message}`);
+        }
+        ctx.reply("🗑️ تم حذف الملف بعد الإرسال.");
+      });
+    });
+  } catch (err) {
+    await ctx.reply(`❌ فشل في معالجة الملفات: ${err.message}`);
+  }
+});
+
+// تشغيل الب
+
+
+const base = "https://www.pinterest.com";
+const search = "/resource/BaseSearchResource/get/";
+
+// الهيدرز
+const reqHeaders = {
+  'accept': 'application/json, text/javascript, */*, q=0.01',
+  'referer': 'https://www.pinterest.com/',
+  'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
+  'x-app-version': 'a9522f',
+  'x-pinterest-appstate': 'active',
+  'x-pinterest-pws-handler': 'www/[username]/[slug].js',
+  'x-requested-with': 'XMLHttpRequest'
+};
+
+// جلب الكوكيز
+async function getCookies() {
+  try {
+    const response = await axios.get(base);
+    const setHeaders = response.headers['set-cookie'];
+    if (setHeaders) {
+      return setHeaders.map(c => c.split(';')[0].trim()).join('; ');
+    }
+    return null;
+  } catch (error) {
+    console.error("❌ خطأ أثناء جلب الكوكيز:", error.message);
+    return null;
+  }
+}
+
+// البحث في Pinterest
+async function searchPinterest(query) {
+  if (!query) return { status: false, message: "⚠️ يرجى كتابة كلمة للبحث!" };
+
+  try {
+    const cookies = await getCookies();
+    if (!cookies) {
+      return { status: false, message: "⚠️ فشل في الحصول على الكوكيز." };
+    }
+
+    const params = {
+      source_url: `/search/pins/?q=${query}`,
+      data: JSON.stringify({
+        options: { isPrefetch: false, query, scope: "pins", bookmarks: [""], page_size: 10 },
+        context: {}
+      }),
+      _: Date.now()
+    };
+
+    const { data } = await axios.get(`${base}${search}`, {
+      headers: { ...reqHeaders, cookie: cookies },
+      params
+    });
+
+    const results = data.resource_response.data.results.filter(v => v.images?.orig);
+    if (results.length === 0) {
+      return { status: false, message: `❌ لم يتم العثور على نتائج: *${query}*` };
+    }
+
+    return {
+      status: true,
+      pins: results.map(result => ({
+        id: result.id,
+        title: result.title || "— بدون عنوان —",
+        description: result.description || "— لا يوجد وصف —",
+        pin_url: `https://pinterest.com/pin/${result.id}`,
+        image: result.images.orig.url,
+        uploader: {
+          username: result.pinner.username,
+          full_name: result.pinner.full_name,
+          profile_url: `https://pinterest.com/${result.pinner.username}`
+        }
+      }))
+    };
+  } catch (error) {
+    console.error("❌ خطأ في البحث:", error.message);
+    return { status: false, message: "❌ حدث خطأ أثناء البحث." };
+  }
+}
+
+// أمر تيليجرام
+bot.command(["pinterest", "بينترست"], async (ctx) => {
+  const query = ctx.message.text.split(" ").slice(1).join(" ");
+  if (!query) {
+    return ctx.reply("📌 *مثال الاستخدام:*\n/pinterest ديكور مطبخ");
+  }
+
+  await ctx.reply("⌛ *جـاري البحـث في Pinterest...*");
+
+  const result = await searchPinterest(query);
+  if (!result.status) {
+    return ctx.reply(`⚠️ ${result.message}`);
+  }
+
+  for (const [i, pin] of result.pins.entries()) {
+    await ctx.replyWithPhoto({ url: pin.image }, {
+      caption: `📷 *الصورة ${i + 1}*\n\n🖼️ *العنوان:* ${pin.title}\n📝 *الوصف:* ${pin.description}\n👤 *الناشر:* ${pin.uploader.full_name} (@${pin.uploader.username})\n🔗 [فتح في Pinterest](${pin.pin_url})`,
+      parse_mode: "Markdown"
+    });
+  }
+});
+// حجم الخريطة
+const size = 10;
+let playerData = {};
+
+// 🗺️ رسم الخريطة
+function renderMap(pos, end, finished = false, lost = false) {
+  let map = "";
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (x === pos.x && y === pos.y) {
+        map += "🚖";
+      } else if (x === end.x && y === end.y) {
+        map += "📍";
+      } else {
+        map += "▫️";
+      }
+    }
+    map += "\n";
+  }
+
+  if (finished) {
+    map += "\n🌷 وصلت للزبون!";
+  } else if (lost) {
+    map += "\n❌ خبطت في الحيطة و خسرت.";
+  } else {
+    map += "\n🚕 اتحرك عشان توصل للزبون 📍";
+  }
+
+  return map;
+}
+
+// 🚖 بدء الل
+export default function setupTaxi(bot) {
+  bot.command("taxi", async (ctx) => {
+    const userId = ctx.from.id;
+
+    const end = {
+      x: Math.floor(Math.random() * size),
+      y: Math.floor(Math.random() * size),
+    };
+
+    playerData[userId] = {
+      pos: { x: 0, y: 0 },
+      end,
+      gameOver: false,
+    };
+
+    await ctx.reply(
+      renderMap(playerData[userId].pos, end),
+      Markup.inlineKeyboard([
+        [Markup.button.callback("⬆️", "taxi_up")],
+        [
+          Markup.button.callback("⬅️", "taxi_left"),
+          Markup.button.callback("➡️", "taxi_right"),
+        ],
+        [Markup.button.callback("⬇️", "taxi_down")],
+      ])
+    );
+  });
+
+  bot.on("callback_query", async (ctx) => {
+    const userId = ctx.from.id;
+    const data = ctx.callbackQuery.data;
+
+    if (!data.startsWith("taxi_")) return; // تجاهل أي زرار مش للعبة
+
+    if (!playerData[userId] || playerData[userId].gameOver) {
+      return ctx.answerCbQuery("❌ مفيش لعبة شغالة دلوقتي");
+    }
+
+    let { pos, end } = playerData[userId];
+
+    // تحريك اللاعب
+    if (data === "taxi_up") pos.y--;
+    if (data === "taxi_down") pos.y++;
+    if (data === "taxi_left") pos.x--;
+    if (data === "taxi_right") pos.x++;
+
+    // التحقق من الخسارة
+    if (pos.x < 0 || pos.y < 0 || pos.x >= size || pos.y >= size) {
+      playerData[userId].gameOver = true;
+      return ctx.editMessageText(renderMap(pos, end, false, true));
+    }
+
+    // التحقق من الفوز
+    if (pos.x === end.x && pos.y === end.y) {
+      playerData[userId].gameOver = true;
+      return ctx.editMessageText(renderMap(pos, end, true, false));
+    }
+
+    // تحديث الخريطة
+    await ctx.editMessageText(
+      renderMap(pos, end),
+      Markup.inlineKeyboard([
+        [Markup.button.callback("⬆️", "taxi_up")],
+        [
+          Markup.button.callback("⬅️", "taxi_left"),
+          Markup.button.callback("➡️", "taxi_right"),
+        ],
+        [Markup.button.callback("⬇️", "taxi_down")],
+      ])
+    );
+
+    ctx.answerCbQuery();
+  });
+}
+
+
+// قاعدة بيانات بسيطة (ممكن تغيرها حسب نظامك)
+const bannedUsers = new Set();
+
+// أوامر البان و البانفك
+bot.command(["ban", "unban"], async (ctx) => {
+  const command = ctx.message.text.split(" ")[0].replace("/", "");
+  const replyUser = ctx.message.reply_to_message
+    ? ctx.message.reply_to_message.from
+    : null;
+
+  // لازم ترد على رسالة عشان تحدد مين يتبان
+  if (!replyUser) {
+    return ctx.reply("📌 حدد المستخدم بالرد على رسالته.");
+  }
+
+  const targetId = replyUser.id;
+  const targetName = replyUser.first_name;
+
+  if (command === "ban") {
+    bannedUsers.add(targetId);
+    return ctx.replyWithMarkdown(
+      `❲🔒❳ تم حظر المستخدم [${targetName}](tg://user?id=${targetId})\n\n⛊ هذا المستخدم ليس له الأذن لاستعمالي الآن`
+    );
+  }
+
+  if (command === "unban") {
+    bannedUsers.delete(targetId);
+    return ctx.replyWithMarkdown(
+      `❲🔓❳ تم إلغاء حظر المستخدم [${targetName}](tg://user?id=${targetId})\n\n⛊ هذا المستخدم له الأذن لاستعمالي الآن`
+    );
+  }
+});
+
+// مثال: منع المحظورين من استعمال أي أوامر
+bot.use((ctx, next) => {
+  if (bannedUsers.has(ctx.from.id)) {
+    return ctx.reply("⛔ أنت محظور من استخدام البوت.");
+  }
+  return next();
+});
+
+const zodiak = [
+    { name: "الجدي", month: 1, detail: "مولود برج الجدي طموح ومنظم، يحب العمل والاجتهاد لتحقيق أهدافه.", positive: "طموح، منظم، صبور، يتحمل المسؤولية.", negative: "عنيد، يميل إلى التشاؤم، يحب السيطرة." },
+    { name: "الدلو", month: 2, detail: "مولود برج الدلو مبتكر ومحب للاستقلالية. يمتاز بالأفكار الإبداعية وحب المغامرة.", positive: "إبداعي، مستقل، ودود، متفتح الذهن.", negative: "عنيد، يميل إلى الانعزال، قد يكون متمردًا." },
+    { name: "الحوت", month: 3, detail: "مولود برج الحوت حساس وعاطفي. يتميز بخياله الواسع وتعاطفه الكبير مع الآخرين.", positive: "حساس، مبدع، متعاطف، متفهم.", negative: "سريع التأثر، يميل إلى الهروب من الواقع، قد يكون متشائمًا." },
+    { name: "الحمل", month: 4, detail: "مولود برج الحمل شجاع ومغامر. يتميز بالطاقة والحماس والرغبة في قيادة المواقف.", positive: "شجاع، مبدع، حيوي، صريح.", negative: "عصبي، متسرع، يميل إلى الأنانية أحيانًا." },
+    { name: "الثور", month: 5, detail: "مولود برج الثور صبور وعملي. يحب الاستقرار ويمتلك إرادة قوية لتحقيق أهدافه.", positive: "صبور، قوي الإرادة، مخلص، واقعي.", negative: "عنيد، يميل إلى الكسل، مادي أحيانًا." },
+    { name: "الجوزاء", month: 6, detail: "مولود برج الجوزاء اجتماعي وذكي. يتميز بمرونته وقدرته على التكيف مع المواقف المختلفة.", positive: "ذكي، اجتماعي، مرن، مرح.", negative: "غير مستقر، يميل إلى التردد، قد يكون سطحيًا." },
+    { name: "السرطان", month: 7, detail: "مولود برج السرطان عاطفي ومخلص. يهتم بعائلته وأصدقائه ويحب حماية من حوله.", positive: "عاطفي، مخلص، حنون، مبدع.", negative: "حساس جدًا، متقلب المزاج، يميل إلى التشبث." },
+    { name: "الأسد", month: 8, detail: "مولود برج الأسد واثق ومبدع. يتميز بالقوة والكرم ويحب أن يكون في مركز الاهتمام.", positive: "واثق، مبدع، كريم، قائد بالفطرة.", negative: "متعجرف، يميل إلى السيطرة، يحب المديح الزائد." },
+    { name: "العذراء", month: 9, detail: "مولود برج العذراء عملي ودقيق. يهتم بالتفاصيل ويحب مساعدة الآخرين.", positive: "منظم، محلل، مجتهد، مهتم بالتفاصيل.", negative: "ناقد جدًا، يميل إلى القلق، قد يكون متطلبًا." },
+    { name: "الميزان", month: 10, detail: "مولود برج الميزان عادل واجتماعي. يسعى لتحقيق التوازن في حياته ويحب الجمال والفن.", positive: "عادل، دبلوماسي، جذاب، محب للجمال.", negative: "متردد، يميل إلى إرضاء الآخرين على حساب نفسه، غير حاسم." },
+    { name: "العقرب", month: 11, detail: "مولود برج العقرب قوي وشغوف. يتميز بالغموض والقدرة على التحليل العميق.", positive: "شجاع، قوي الإرادة، مخلص، غامض.", negative: "غيور، مسيطر، قد يكون حاقدًا أحيانًا." },
+    { name: "القوس", month: 12, detail: "مولود برج القوس مغامر وصريح. يحب الحرية والسفر واكتشاف أشياء جديدة.", positive: "مغامر، صريح، متفائل، كريم.", negative: "غير صبور، يميل إلى التهور، قد يكون غير ملتزم." }
+];
+
+function getZodiacByMonth(month) {
+    return zodiak.find(zodiac => zodiac.month === month) || { name: "غير معروف", detail: "لا يوجد معلومات عن هذا الشهر.", positive: "لا شيء", negative: "لا شيء" };
+}
+
+bot.command("sign", async (ctx) => {
+    const args = ctx.message.text.split(" ").slice(1);
+    if (!args[0]) return ctx.reply(`مثال:\n/برجي 3`);
+
+    const month = parseInt(args[0]);
+    if (isNaN(month) || month < 1 || month > 12) {
+        return ctx.reply('lشهر غير صالح. أدخل رقم الشهر من 1 إلى 12.', { parse_mode: "Markdown" });
+    }
+
+    const zodiac = getZodiacByMonth(month);
+
+    const teks = `
+━━━━━━❰･𓃦･❱━━━━━━
+≡ ◡̈⃝🔥❯
+𓃠 الشهر: ${month}
+
+≡ ◡̈⃝🔥❯
+𓃠 البرج: ${zodiac.name}
+
+≡ ◡̈⃝🔥❯
+𓃠 التفاصيل:
+${zodiac.detail}
+
+≡ ◡̈⃝🔥❯
+𓃠 الصفات الإيجابية:
+${zodiac.positive}
+
+≡ ◡̈⃝🔥❯
+𓃠 الصفات السلبية:
+${zodiac.negative}
+━━━━━━❰･𓃦･❱━━━━━━
+`.trim();
+
+    ctx.reply(teks, { parse_mode: "Markdown" });
+});
+
+
+// totag command (forward quoted message with mentions)
+bot.command("totag", async (ctx) => {
+  const chatId = ctx.chat.id;
+
+  if (ctx.chat.type !== "supergroup" && ctx.chat.type !== "group") {
+    return ctx.reply("🌷 هذا الأمر يعمل فقط داخل المجموعات");
+  }
+
+  // تحقق إذا المرسل أدمن أو منشئ
+  const member = await ctx.telegram.getChatMember(chatId, ctx.from.id);
+  if (!["administrator", "creator"].includes(member.status)) {
+    return ctx.reply("┏━━━━━━━━━━━━━━━━⬣\n┇🔥┇ ↯ الأمر الادمن بس \n❐⊹━━━━━『𝙎𝙋𝘼𝙈』━━━━━⊹❐\n┇🌷┇ ↯ انتا مجرد عضو \n┗━━━━━━━━━━━━━━━━⬣");
+  }
+
+  if (!ctx.message.reply_to_message) {
+    return ctx.reply("🌷 يجب الرد على رسالة لاستخدام الأمر\nمثال: `/totag` مع رد على رسالة", { parse_mode: "Markdown" });
+  }
+
+  try {
+    // نحاول نجيب الإداريين على الأقل (اللي يقدر البوت يشوفهم)
+    const admins = await ctx.telegram.getChatAdministrators(chatId);
+    const mentionIds = admins.map((a) => a.user.id);
+
+    await ctx.telegram.sendMessage(chatId, ctx.message.reply_to_message.text || "🌷", {
+      reply_to_message_id: ctx.message.message_id,
+      entities: mentionIds.map((id) => ({
+        type: "mention",
+        offset: 0,
+        length: 0,
+        user: { id },
+      })),
+    });
+
+  } catch (err) {
+    console.error("totag error:", err);
+    ctx.reply("❌ حصل خطأ أثناء تنفيذ totag");
+  }
+});
+
+
+// tagall command (mention all with message)
+bot.command("tagall", async (ctx) => {
+  const chatId = ctx.chat.id;
+  const args = ctx.message.text.split(" ").slice(1).join(" ");
+  const sender = ctx.from.username || ctx.from.first_name;
+
+  if (ctx.chat.type !== "supergroup" && ctx.chat.type !== "group") {
+    return ctx.reply("🌷 هذا الأمر يعمل داخل المجموعات");
+  }
+
+  // تحقق إذا المرسل أدمن أو منشئ
+  const member = await ctx.telegram.getChatMember(chatId, ctx.from.id);
+  if (!["administrator", "creator"].includes(member.status)) {
+    return ctx.reply("┏━━━━━━━━━━━━━━━━⬣\n┇🔥┇ ↯ الأمر الادمن بس \n❐⊹━━━━━『𝙎𝙋𝘼𝙈』━━━━━⊹❐\n┇🌷┇ ↯ انتا مجرد عضو \n┗━━━━━━━━━━━━━━━━⬣");
+  }
+
+  try {
+    const membersCount = await ctx.telegram.getChatMembersCount(chatId);
+    let mentions = "";
+    let batch = 0;
+
+    for (let i = 0; i < membersCount; i++) {
+      try {
+        const member = await ctx.telegram.getChatMember(chatId, i);
+        if (member.user.is_bot) continue; // استبعاد البوتات
+        mentions += `[${member.user.first_name}](tg://user?id=${member.user.id}) `;
+        
+        // كل 10 منشن ابعت رسالة عشان ميتحظرش البوت
+        if ((i + 1) % 10 === 0) {
+          await ctx.telegram.sendMessage(chatId, mentions, { parse_mode: "Markdown" });
+          mentions = "";
+          batch++;
+        }
+      } catch {}
+    }
+
+    if (mentions !== "") {
+      await ctx.telegram.sendMessage(chatId, mentions, { parse_mode: "Markdown" });
+    }
+
+    ctx.reply(`🌷 تم عمل منشن للجميع بواسطة: @${sender}\n📝 الرسالة: ${args || "لا يوجد نص"}`);
+
+  } catch (err) {
+    console.error("tagall error:", err);
+    ctx.reply("🌷 حصل خطأ أثناء تنفيذ tagall");
+  }
+});
+// set bot bio
+bot.command("setbotbio", async (ctx) => {
+  const args = ctx.message.text.split(" ").slice(1).join(" ");
+  const chatId = ctx.chat.id;
+
+  if (ctx.chat.type !== "supergroup" && ctx.chat.type !== "group") {
+    return ctx.reply("🌷 هذا الأمر يعمل فقط داخل المجموعات");
+  }
+
+  const member = await ctx.telegram.getChatMember(chatId, ctx.from.id);
+  if (!["administrator", "creator"].includes(member.status)) {
+    return ctx.reply("┏━━━━━━━━━━━━━━━━⬣\n┇🔥┇ ↯ الأمر الادمن بس \n❐⊹━━━━━『𝙎𝙋𝘼𝙈』━━━━━⊹❐\n┇🌷┇ ↯ انتا مجرد عضو \n┗━━━━━━━━━━━━━━━━⬣");
+  }
+
+  if (!args) {
+    return ctx.reply("🌷 اكتب البايو الجديد للبوت\nمثال: /setbotbio بوت تجريبي");
+  }
+
+  try {
+    await ctx.telegram.setMyDescription({ description: args });
+    ctx.reply("🌷 تم تغيير بايو البوت بنجاح");
+  } catch (err) {
+    ctx.reply("❌ فشل في تغيير بايو البوت");
+  }
+});
+
+// set group name
+bot.command(["setname", "setgroupname", "setsubject"], async (ctx) => {
+  const args = ctx.message.text.split(" ").slice(1).join(" ");
+  const chatId = ctx.chat.id;
+
+  if (ctx.chat.type !== "supergroup" && ctx.chat.type !== "group") {
+    return ctx.reply("🌷 هذا الأمر يعمل فقط داخل المجموعات");
+  }
+
+  const member = await ctx.telegram.getChatMember(chatId, ctx.from.id);
+  if (!["administrator", "creator"].includes(member.status)) {
+    return ctx.reply("┏━━━━━━━━━━━━━━━━⬣\n┇🔥┇ ↯ الأمر الادمن بس \n❐⊹━━━━━『𝙎𝙋𝘼𝙈』━━━━━⊹❐\n┇🌷┇ ↯ انتا مجرد عضو \n┗━━━━━━━━━━━━━━━━⬣");
+  }
+
+  if (!args) return ctx.reply("🌷 اكتب الاسم الجديد للمجموعة");
+
+  try {
+    await ctx.telegram.setChatTitle(chatId, args);
+    ctx.reply("🌷 تم تغيير اسم المجموعة بنجاح");
+  } catch (err) {
+    ctx.reply("❌ فشل في تغيير اسم المجموعة");
+  }
+});
+
+
+
+// دالة تحميل تيك توك
+async function tiktok(url) {
+  let form = new URLSearchParams()
+  form.append('q', url)
+  form.append('lang', 'id')
+
+  let { data } = await axios.post('https://tiksave.io/api/ajaxSearch', form, {
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      'origin': 'https://tiksave.io',
+      'referer': 'https://tiksave.io/id/download-tiktok-mp3',
+      'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36'
+    }
+  })
+
+  const $ = cheerio.load(data.data)
+  let title = $('.tik-left').find('.content').text().trim()
+  let thumbnail = $('.tik-left').find('img').attr('src')
+  let video = $('.dl-action').find('p').first().find('a').attr('href')
+  let audio = $('.dl-action').find('p').last().find('a').attr('href')
+  let slide = []
+
+  $('ul.download-box').find('li').each((i, e) => {
+    slide.push($(e).find('img').attr('src'))
+  })
+
+  return {
+    title,
+    thumbnail,
+    video,
+    audio,
+    slide
+  }
+}
+
+// أمر التليجرام
+bot.command('ttaudio', async (ctx) => {
+  const text = ctx.message.text.split(' ').slice(1).join(' ')
+  if (!text) return ctx.reply('⚠️ ابعت رابط تيك توك بعد الأمر\n\nمثال:\n/ttaudio https://vm.tiktok.com/xxxx/')
+
+  try {
+    const result = await tiktok(text)
+    if (!result.audio) return ctx.reply('❌ ما لقيتش الصوت في الرابط ده.')
+
+    await ctx.replyWithAudio({ url: result.audio }, {
+      title: result.title || 'tiktok-audio',
+      performer: 'TikTok'
+    })
+
+  } catch (e) {
+    console.error(e)
+    ctx.reply('❌ فشل تحميل الصوت من تيك توك.')
+  }
+});
+
+// set group description
+bot.command(["setdesc", "setdesk"], async (ctx) => {
+  const args = ctx.message.text.split(" ").slice(1).join(" ");
+  const chatId = ctx.chat.id;
+
+  if (ctx.chat.type !== "supergroup" && ctx.chat.type !== "group") {
+    return ctx.reply("🌷 هذا الأمر يعمل فقط داخل المجموعات");
+  }
+
+  const member = await ctx.telegram.getChatMember(chatId, ctx.from.id);
+  if (!["administrator", "creator"].includes(member.status)) {
+    return ctx.reply("┏━━━━━━━━━━━━━━━━⬣\n┇🔥┇ ↯ الأمر الادمن بس \n❐⊹━━━━━『𝙎𝙋𝘼𝙈』━━━━━⊹❐\n┇🌷┇ ↯ انتا مجرد عضو \n┗━━━━━━━━━━━━━━━━⬣");
+  }
+
+  if (!args) return ctx.reply("🌷 اكتب الوصف الجديد للمجموعة");
+
+  try {
+    await ctx.telegram.setChatDescription(chatId, args);
+    ctx.reply("🌷 تم تغيير وصف المجموعة بنجاح");
+  } catch (err) {
+    ctx.reply("❌ فشل في تغيير وصف المجموعة");
+  }
+});
+// أمر البحث
+bot.command("xnxxsearch", async (ctx) => {
+  const query = ctx.message.text.split(" ").slice(1).join(" ");
+  if (!query) return ctx.reply("❌ اكتب كلمة البحث بعد الأمر\nمثال: /xnxxsearch test");
+
+  const data = await xnxxsearch(query, 1);
+  if (!data.status) return ctx.reply("🌷 حصل خطأ أثناء البحث");
+
+  let text = "🔎 نتائج البحث:\n\n";
+  data.result.forEach((v, i) => {
+    text += `l${i + 1}.l ${v.title}\n👤 ${v.author} | ⏱️ ${v.time} | 📺 ${v.resolution} | 👀 ${v.views}\n🔗 ${v.link}\n\n`;
+  });
+
+  ctx.reply(text, { parse_mode: "Markdown" });
+});
+
+// أمر تحميل فيديو
+bot.command("xnxxdl", async (ctx) => {
+  const url = ctx.message.text.split(" ").slice(1).join(" ");
+  if (!url) return ctx.reply("❌ اكتب رابط الفيديو بعد الأمر\nمثال: /xnxxdl https://www.xnxx.com/...");
+
+  const data = await xnxxdl(url);
+  if (!data.status) return ctx.reply("🌷 حصل خطأ أثناء التحميل");
+
+  await ctx.replyWithPhoto({ url: data.result.image }, { caption: `🎬 ${data.result.title}\n⏱️ ${data.result.duration}` });
+
+  await ctx.reply(`🎥 روابط التحميل:\n\n🔹 جودة منخفضة: ${data.result.files.low}\n🔹 جودة عالية: ${data.result.files.high}`);
+});
+
+
+
+
+bot.command(["rmbg", "حذف_الخلفية", "ازالة_الخلفية"], async (ctx) => {
+  try {
+    if (!ctx.message.reply_to_message || !ctx.message.reply_to_message.photo) {
+      return ctx.reply(
+        "『🌷أرسل صورة أو قم بالرد على صورة لاستخدام هذا الأمر.🌷』\n\nمثال:\n/rmbg (بالرد على صورة)"
+      );
+    }
+
+    await ctx.reply("🕒 جاري معالجة الصورة...");
+
+    // تحميل الصورة من تيليجرام
+    const fileId =
+      ctx.message.reply_to_message.photo[
+        ctx.message.reply_to_message.photo.length - 1
+      ].file_id;
+
+    const fileLink = await ctx.telegram.getFileLink(fileId);
+    const imageBuffer = (
+      await axios.get(fileLink.href, { responseType: "arraybuffer" })
+    ).data;
+
+    const filename = `upload.png`;
+    const result = await Uguu(imageBuffer, filename);
+
+    // API لإزالة الخلفية
+    const { data } = await axios.get(
+      `https://www.abella.icu/rmbg?url=${result.url}`,
+      { responseType: "arraybuffer" }
+    );
+
+    // إرسال الصورة المعدلة
+    await ctx.replyWithPhoto({ source: Buffer.from(data) });
+  } catch (error) {
+    console.error(error);
+    await ctx.reply(`🌷 حصل خطأ: ${error.message || error}`);
+  }
+});
+
+// أمر التحويل
+
+
+// أمر /tourl
+bot.command("to_url", async (ctx) => {
+  const repliedMsg = ctx.message.reply_to_message;
+
+  // لازم يكون فيه ريبلاي على ملف/صورة/فيديو
+  if (
+    !repliedMsg ||
+    (!repliedMsg.document && !repliedMsg.photo && !repliedMsg.video)
+  ) {
+    return ctx.reply("❌ من فضلك اعمل ريبلاي على ملف / صورة / فيديو مع الأمر /tourl");
+  }
+
+  let fileId, fileName;
+
+  if (repliedMsg.document) {
+    fileId = repliedMsg.document.file_id;
+    fileName = repliedMsg.document.file_name || `file_${Date.now()}`;
+  } else if (repliedMsg.photo) {
+    const photos = repliedMsg.photo;
+    fileId = photos[photos.length - 1].file_id; // أعلى جودة صورة
+    fileName = `photo_${Date.now()}.jpg`;
+  } else if (repliedMsg.video) {
+    fileId = repliedMsg.video.file_id;
+    fileName = `video_${Date.now()}.mp4`;
+  }
+
+  try {
+    const processingMsg = await ctx.reply("🌷 جاري رفع الملف على Catbox...");
+
+    // رابط الملف من تيليجرام
+    const file = await ctx.telegram.getFile(fileId);
+    const fileLink = `https://api.telegram.org/file/bot${bot.token}/${file.file_path}`;
+
+    const response = await axios.get(fileLink, { responseType: "stream" });
+
+    const form = new FormData();
+    form.append("reqtype", "fileupload");
+    form.append("fileToUpload", response.data, {
+      filename: fileName,
+      contentType: response.headers["content-type"],
+    });
+
+    const { data: catboxUrl } = await axios.post(
+      "https://catbox.moe/user/api.php",
+      form,
+      {
+        headers: form.getHeaders(),
+      }
+    );
+
+    if (!catboxUrl.startsWith("https://")) {
+      throw new Error("الموقع لم يرجع رابط صالح");
+    }
+
+    await ctx.telegram.editMessageText(
+      ctx.chat.id,
+      processingMsg.message_id,
+      null,
+      `🌷 تم الرفع بنجاح!\n📎 الرابط: ${catboxUrl}`
+    );
+  } catch (error) {
+    console.error("خطأ في الرفع:", error?.response?.data || error.message);
+    ctx.reply("❌ فشل رفع الملف إلى Catbox");
+  }
+});
+
+// التعامل مع زر النسخ
+bot.on("callback_query", async (ctx) => {
+  const data = ctx.callbackQuery.data;
+  if (data.startsWith("copy_")) {
+    const link = data.replace("copy_", "");
+    await ctx.answerCbQuery("🌷 تم استخراج الرابط!");
+    await ctx.reply(`📋 الرابط المنسوخ:\n${link}`);
+  }
+});
+
+// أوامر التأثيرات
+async function makeEphoto(url, text) {
+  const { data: html } = await axios.get(url, {
+  headers: {
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "referer": "https://en.ephoto360.com/",
+    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
+  }
+});
+
+  const $ = cheerio.load(html);
+  const form = $("form").first();
+  let action = form.attr("action");
+  if (!action) throw new Error("❌ لم يتم العثور على الفورم");
+
+  // إصلاح الرابط (لو كان relative path)
+  if (!action.startsWith("http")) {
+    action = new URL(action, "https://en.ephoto360.com").href;
+  }
+
+  // تجهيز البيانات
+  const formData = new URLSearchParams();
+  form.find("input").each((i, el) => {
+    const name = $(el).attr("name");
+    const value = $(el).attr("value") || "";
+    if (name) formData.append(name, value);
+  });
+  formData.append("text[]", text);
+
+  // POST للـ action
+  const { data: resultHtml } = await axios.post(action, formData.toString(), {
+    headers: {
+      "user-agent": "Mozilla/5.0",
+      "content-type": "application/x-www-form-urlencoded"
+    }
+  });
+
+  const $$ = cheerio.load(resultHtml);
+  const img = $$(".thumbnail img").attr("src");
+  if (!img) throw new Error("❌ فشل استخراج الصورة");
+
+  // إرجاع لينك الصورة النهائي
+  return img.startsWith("http") ? img : `https://en.ephoto360.com${img}`;
+}
+
+bot.command([
+  "glitchtext", "writetext", "advancedglow", "typographytext", "pixelglitch",
+  "neonglitch", "flagtext", "flag3dtext", "deletingtext", "blackpinkstyle",
+  "glowingtext", "underwatertext", "logomaker", "cartoonstyle", "papercutstyle",
+  "watercolortext", "effectclouds", "blackpinklogo", "gradienttext", "summerbeach",
+  "luxurygold", "multicoloredneon", "sandsummer", "galaxywallpaper", "1917style",
+  "makingneon", "royaltext", "freecreate", "galaxystyle", "lighteffects"
+], async (ctx) => {
+  const text = ctx.message.text.split(" ").slice(1).join(" ");
+  const command = ctx.message.text.split(" ")[0].replace("/", "").toLowerCase();
+
+  if (!text) {
+    return ctx.reply("⌗ اكتب نص بعد الأمر.\nمثال:\n/" + command + " LoliBot");
+  }
+
+  await ctx.reply("⏱️ جاري المعالجة...");
+
+  // جدول اللينكات (روابط كاملة)
+  const links = {
+    glitchtext: "https://en.ephoto360.com/create-digital-glitch-text-effects-online-767.html",
+    writetext: "https://en.ephoto360.com/write-text-on-wet-glass-online-589.html",
+    advancedglow: "https://en.ephoto360.com/advanced-glow-effects-74.html",
+    typographytext: "https://en.ephoto360.com/create-typography-text-effect-on-pavement-online-774.html",
+    pixelglitch: "https://en.ephoto360.com/create-pixel-glitch-text-effect-online-769.html",
+    neonglitch: "https://en.ephoto360.com/create-impressive-neon-glitch-text-effects-online-768.html",
+    flagtext: "https://en.ephoto360.com/nigeria-3d-flag-text-effect-online-free-753.html",
+    flag3dtext: "https://en.ephoto360.com/free-online-american-flag-3d-text-effect-generator-725.html",
+    deletingtext: "https://en.ephoto360.com/create-eraser-deleting-text-effect-online-717.html",
+    blackpinkstyle: "https://en.ephoto360.com/online-blackpink-style-logo-maker-effect-711.html",
+    glowingtext: "https://en.ephoto360.com/create-glowing-text-effects-online-706.html",
+    underwatertext: "https://en.ephoto360.com/3d-underwater-text-effect-online-682.html",
+    logomaker: "https://en.ephoto360.com/free-bear-logo-maker-online-673.html",
+    cartoonstyle: "https://en.ephoto360.com/create-a-cartoon-style-graffiti-text-effect-online-668.html",
+    papercutstyle: "https://en.ephoto360.com/multicolor-3d-paper-cut-style-text-effect-658.html",
+    watercolortext: "https://en.ephoto360.com/create-a-watercolor-text-effect-online-655.html",
+    effectclouds: "https://en.ephoto360.com/write-text-effect-clouds-in-the-sky-online-619.html",
+    blackpinklogo: "https://en.ephoto360.com/create-blackpink-logo-online-free-607.html",
+    gradienttext: "https://en.ephoto360.com/create-3d-gradient-text-effect-online-600.html",
+    summerbeach: "https://en.ephoto360.com/write-in-sand-summer-beach-online-free-595.html",
+    luxurygold: "https://en.ephoto360.com/create-a-luxury-gold-text-effect-online-594.html",
+    multicoloredneon: "https://en.ephoto360.com/create-multicolored-neon-light-signatures-591.html",
+    sandsummer: "https://en.ephoto360.com/write-in-sand-summer-beach-online-576.html",
+    galaxywallpaper: "https://en.ephoto360.com/create-galaxy-wallpaper-mobile-online-528.html",
+    "1917style": "https://en.ephoto360.com/1917-style-text-effect-523.html",
+    makingneon: "https://en.ephoto360.com/making-neon-light-text-effect-with-galaxy-style-521.html",
+    royaltext: "https://en.ephoto360.com/royal-text-effect-online-free-471.html",
+    freecreate: "https://en.ephoto360.com/free-create-a-3d-hologram-text-effect-441.html",
+    galaxystyle: "https://en.ephoto360.com/create-galaxy-style-free-name-logo-438.html",
+    lighteffects: "https://en.ephoto360.com/create-light-effects-green-neon-online-429.html"
+  };
+
+  try {
+    const url = links[command];
+    if (!url) return ctx.reply("❌ الأمر غير موجود في القائمة.");
+
+    const result = await makeEphoto(url, text); // لازم هنا makeEphoto يرجع لينك صورة كامل
+    await ctx.replyWithPhoto({ url: result }, { caption: "🌷 تم الإنشاء بنجاح" });
+  } catch (e) {
+    console.error(e);
+    ctx.reply("❌ حصل خطأ أثناء إنشاء الصورة.");
+  }
+});
+
+
+// yespotato telegram bot - supports info / video / mp3 / thumbnail / tags
+
+// config (from your original code)
+const SHARED_SECRET = "4W5crB-=A/klR]!";
+const ORIGIN = "http://192.168.251.190:3000"; // كما في كودك الأصلي
+const YESP_BASE = "https://yespotato.com";
+
+// helper to build signature & headers
+function makeSignaturePayload() {
+  const ts = Date.now();
+  const payload = `${ts}|${ORIGIN}|${SHARED_SECRET}`;
+  const signature = CryptoJS.SHA256(payload).toString();
+  return { signature, ts };
+}
+
+function baseHeaders() {
+  return {
+    "Content-Type": "application/json",
+    origin: "https://yespotato.com",
+    referer: "https://yespotato.com/",
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+  };
+}
+
+// ----------------- core API helpers -----------------
+async function callYoutu999(url) {
+  const { signature, ts } = makeSignaturePayload();
+  const body = { signature, ts, url };
+  const res = await axios.post(`${YESP_BASE}/youtu999`, body, { headers: baseHeaders() });
+  return res.data; // expected structure: data.urls, data.title, data.thumbnail, data.tags...
+}
+
+async function triggerDownloadOnServer(videoUrl, audioUrl, videoSize = 0, audioSize = 0, fileType = "video", has_audio = "false") {
+  // fileType: 'video' or 'audio'
+  const body = {
+    contentLength: videoSize || 0,
+    file_type: fileType,
+    has_audio: has_audio,
+    url: videoUrl,
+    audioSize: audioSize || 0,
+    audioURL: audioUrl || ""
+  };
+  const res = await axios.post(`${YESP_BASE}/download-file`, body, { headers: baseHeaders() });
+  return res.data; // expects resp.data.file_name
+}
+
+async function pollProgress(fileName, attempts = 40, interval = 2000) {
+  if (!fileName) throw new Error("missing file name for progress check");
+  for (let i = 0; i < attempts; i++) {
+    const res = await axios.get(`${YESP_BASE}/progress/${fileName}`, { headers: baseHeaders() });
+    const data = res.data;
+    if (data?.status === "done" || data?.status === "100" || data?.status === 2) {
+      // return object with paths
+      return data;
+    }
+    await new Promise(r => setTimeout(r, interval));
+  }
+  throw new Error("progress timeout");
+}
+
+async function triggerEncode(videoPath, audioPath) {
+  const body = { video_url: videoPath, audio_url: audioPath };
+  const res = await axios.post(`${YESP_BASE}/encode`, body, { headers: baseHeaders() });
+  return res.data; // should contain data.file_name or similar
+}
+
+async function pollMergeProgress(fileName, attempts = 40, interval = 2000) {
+  if (!fileName) throw new Error("missing file name for merge-progress");
+  for (let i = 0; i < attempts; i++) {
+    const res = await axios.get(`${YESP_BASE}/merge-progress/${fileName}`, { headers: baseHeaders() });
+    const data = res.data;
+    if (data?.status === "done" || data?.status === "100" || data?.status === 2) {
+      return data;
+    }
+    await new Promise(r => setTimeout(r, interval));
+  }
+  throw new Error("merge timeout");
+}
+
+// helper to send file to telegram (tries file upload; fallback to sending link)
+async function safeSendFile(ctx, url, filename, caption = "") {
+  try {
+    // Try as document first (more universal)
+    await ctx.replyWithDocument({ url, filename }, { caption });
+  } catch (err1) {
+    try {
+      // try as video
+      await ctx.replyWithVideo({ url }, { caption });
+    } catch (err2) {
+      // fallback: send direct link
+      await ctx.reply(`${caption}\n\n🔗 Direct link: ${url}`);
+    }
+  }
+}
+
+// ----------------- Commands -----------------
+
+// /ytinfo <url>
+bot.command("ytinfo", async (ctx) => {
+  try {
+    const args = ctx.message.text.split(" ").slice(1);
+    const url = args[0];
+    if (!url) return ctx.reply("❌ استخدم: /ytinfo <YouTube URL>");
+
+    await ctx.reply("⏳ جلب معلومات الفيديو...");
+
+    const res = await callYoutu999(url);
+    const data = res?.data || res; // sometimes wrapper or raw
+
+    // build response
+    const title = data?.title || data?.video_title || "Unknown title";
+    const thumbnail = data?.thumbnail || data?.thumb || data?.poster;
+    const urls = data?.urls || [];
+    const tags = data?.tags || data?.keywords || [];
+
+    let qualities = "لا توجد جودات متاحة";
+    if (Array.isArray(urls) && urls.length) {
+      qualities = urls.map(u => `${u.qualityLabel || u.format || u.quality || "unknown"} (${u.mimeType || ""})`).join("\n");
+    }
+
+    let reply = `*${title}*\n\n*Available formats:*\n${qualities}\n\n`;
+    if (tags && tags.length) reply += `*Tags:* ${Array.isArray(tags) ? tags.join(", ") : tags}\n`;
+    if (thumbnail) reply += `\n🔗 Thumbnail: ${thumbnail}`;
+
+    await ctx.replyWithMarkdown(reply);
+  } catch (e) {
+    console.error("ytinfo error:", e?.toString ? e.toString() : e);
+    ctx.reply("❌ خطأ أثناء جلب معلومات الفيديو.");
+  }
+});
+
+// /ytdl <url> [quality]
+bot.command("ytdl", async (ctx) => {
+  try {
+    const parts = ctx.message.text.split(" ").slice(1);
+    const url = parts[0];
+    const wantedQuality = parts[1] || "480p";
+    if (!url) return ctx.reply("❌ استخدم: /ytdl <YouTube URL> [quality]");
+
+    await ctx.reply("⏳ جاري تجهيز الفيديو — قد يستغرق وقتًا...");
+
+    const infoRes = await callYoutu999(url);
+    const data = infoRes?.data || infoRes;
+    const urls = data?.urls || [];
+
+    // find chosen quality video stream (video-only) and audio stream
+    const videoItem =
+      urls.find(
+        (u) =>
+          u.qualityLabel === wantedQuality ||
+          (u.format && u.format.includes(wantedQuality))
+      ) ||
+      urls.find((u) => u.qualityLabel && u.qualityLabel.includes(wantedQuality)) ||
+      urls.find((u) => u.mimeType && u.mimeType.includes("video"));
+
+    const audioItem =
+      urls.find((u) => u.mimeType && u.mimeType.includes("audio")) ||
+      urls.find(
+        (u) =>
+          u.qualityLabel && u.qualityLabel.toLowerCase().includes("audio")
+      );
+
+    if (!videoItem) return ctx.reply("⚠️ لم أجد بثّ فيديو بالجودة المطلوبة.");
+
+    // trigger server download
+    const downloadResp = await triggerDownloadOnServer(
+      videoItem.url,
+      audioItem?.url || "",
+      videoItem.contentLength || 0,
+      audioItem?.contentLength || 0,
+      "video",
+      "false"
+    );
+    const fileName =
+      downloadResp?.file_name || downloadResp?.data?.file_name;
+    if (!fileName) return ctx.reply("❌ فشل في بدء عملية التحميل على السيرفر.");
+
+    // poll for progress
+    const progress = await pollProgress(fileName);
+
+    // encode (merge)
+    const encodeResp = await triggerEncode(
+      progress.video_path ||
+        progress.data?.video_path ||
+        progress?.video_path,
+      progress.audio_path ||
+        progress.data?.audio_path ||
+        progress?.audio_path
+    );
+    const encFileName =
+      encodeResp?.file_name || encodeResp?.data?.file_name;
+    if (!encFileName) return ctx.reply("❌ فشل في بدء عملية الترميز/الدمج.");
+
+    const merge = await pollMergeProgress(encFileName);
+    const outputLink = merge?.outputLink || merge?.data?.outputLink;
+    const downloadUrl = outputLink
+      ? outputLink.startsWith("http")
+        ? outputLink
+        : `${YESP_BASE}${outputLink}`
+      : null;
+
+    if (!downloadUrl)
+      return ctx.reply("❌ لم أستطع الحصول على رابط نهائي للتحميل.");
+
+    const title = data?.title || "video";
+
+    try {
+      // نجرب كـ video
+      await ctx.replyWithVideo(
+        { url: downloadUrl },
+        { caption: `✅ تم التحميل — *${title}*`, parse_mode: "Markdown" }
+      );
+    } catch (e1) {
+      try {
+        // لو فشل نبعته كـ document
+        await ctx.replyWithDocument(
+          { url: downloadUrl, filename: `${title}.mp4` },
+          { caption: `✅ تم التحميل — *${title}*`, parse_mode: "Markdown" }
+        );
+      } catch (e2) {
+        // آخر حل ندي اللينك للمستخدم
+        await ctx.reply(
+          `⚠️ لم أستطع رفع الفيديو كتليجرام.\n\n🔗 حمله من هنا: ${downloadUrl}`
+        );
+      }
+    }
+  } catch (err) {
+    console.error("❌ ytdl command error:", err);
+    await ctx.reply("❌ حصل خطأ أثناء معالجة طلبك.");
+  }
+});
+    // try to send fil
+
+// /ytmp3 <url>
+bot.command("yt", async (ctx) => {
+  try {
+    const args = ctx.message.text.split(" ").slice(1);
+    const url = args[0];
+    if (!url) return ctx.reply("❌ استخدم: /ytmp3 <YouTube URL>");
+
+    await ctx.reply("⏳ جاري تجهيز الملف الصوتي...");
+
+    const infoRes = await callYoutu999(url);
+    const data = infoRes?.data || infoRes;
+    const urls = data?.urls || [];
+
+    // pick audio stream
+    const audioItem = urls.find(u => u.mimeType && u.mimeType.includes('audio')) || urls.find(u => (u.format && u.format.includes('audio')));
+
+    if (!audioItem) return ctx.reply("⚠️ لم أجد بث صوتي متاح.");
+
+    // Try to trigger server to prepare audio-only
+    const downloadResp = await triggerDownloadOnServer(audioItem.url, "", 0, audioItem.contentLength || 0, "audio", "true");
+    const fileName = downloadResp?.file_name || downloadResp?.data?.file_name;
+    if (!fileName) return ctx.reply("❌ فشل في بدء عملية التحميل الصوتي على السيرفر.");
+
+    const progress = await pollProgress(fileName);
+    // for audio maybe no encode needed; check progress data for audio_path or output
+    let finalLink = progress?.audio_path || progress?.outputLink || progress?.data?.outputLink;
+    if (!finalLink) {
+      // if server gives video/audio paths then try encode with only audio -> sometimes API provides output after merge-progress
+      try {
+        const maybeEnc = await triggerEncode(progress.video_path || "", progress.audio_path || "");
+        const merge = await pollMergeProgress(maybeEnc?.file_name || maybeEnc?.data?.file_name);
+        finalLink = merge?.outputLink || (merge?.data?.outputLink) || finalLink;
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    const downloadUrl = finalLink ? (finalLink.startsWith('http') ? finalLink : `${YESP_BASE}${finalLink}`) : null;
+    if (!downloadUrl) return ctx.reply("❌ لم أستطع الحصول على رابط نهائي للصوت.");
+
+    const title = data?.title || "audio";
+    // try send as audio
+    try {
+      await ctx.replyWithAudio({ url: downloadUrl, filename: `${title}.mp3` }, { caption: `✅ ${title}` });
+    } catch (e) {
+      // fallback to document
+      await safeSendFile(ctx, downloadUrl, `${title}.mp3`, `✅ ${title}`);
+    }
+  } catch (e) {
+    console.error("ytmp3 error:", e?.toString ? e.toString() : e);
+    ctx.reply("❌ حدث خطأ أثناء تجهيز الملف الصوتي.");
+  }
+});
+
+// /ytthumb <url>
+bot.command("ytthumb", async (ctx) => {
+  try {
+    const args = ctx.message.text.split(" ").slice(1);
+    const url = args[0];
+    if (!url) return ctx.reply("❌ استخدم: /ytthumb <YouTube URL>");
+    await ctx.reply("⏳ جلب الصورة المصغرة...");
+
+    const res = await callYoutu999(url);
+    const data = res?.data || res;
+    const thumb = data?.thumbnail || data?.thumb || data?.poster;
+    if (!thumb) return ctx.reply("❌ لم يتم العثور على thumbnail.");
+    await ctx.replyWithPhoto(thumb);
+  } catch (e) {
+    console.error("ytthumb error:", e?.toString ? e.toString() : e);
+    ctx.reply("❌ خطأ أثناء جلب الصورة المصغرة.");
+  }
+});
+
+// /yttags <url>
+bot.command("yttags", async (ctx) => {
+  try {
+    const args = ctx.message.text.split(" ").slice(1);
+    const url = args[0];
+    if (!url) return ctx.reply("❌ استخدم: /yttags <YouTube URL>");
+
+    await ctx.reply("⏳ جلب البيانات...");
+    const res = await callYoutu999(url);
+    const data = res?.data || res;
+    const tags = data?.tags || data?.keywords || [];
+    const desc = data?.description || data?.desc || "";
+
+    let reply = "";
+    if (Array.isArray(tags) && tags.length) reply += `*Tags:* ${tags.join(", ")}\n\n`;
+    if (desc) reply += `*Description:*\n${desc}`;
+
+    if (!reply) reply = "⚠️ لم تتوفر tags أو وصف لهذا الفيديو.";
+    await ctx.replyWithMarkdown(reply);
+  } catch (e) {
+    console.error("yttags error:", e?.toString ? e.toString() : e);
+    ctx.reply("❌ حدث خطأ أثناء جلب الـ tags.");
+  }
+});
+
+// ------------- start bot -------------
+
+bot.command(['احسب', 'calc', 'calcular', 'calculadora'], async (ctx) => {
+  const text = ctx.message.text.split(' ').slice(1).join(' ')
+  if (!text) {
+    return ctx.reply('📌 هات معادلة للحساب، مثال:\n`/احسب 5+5` أو `/احسب 5×5`', { parse_mode: 'Markdown' })
+  }
+
+  let val = text
+    .replace(/[^0-9\-\/+*×÷πEe()piPI/]/g, '')
+    .replace(/×/g, '*')
+    .replace(/÷/g, '/')
+    .replace(/π|pi/gi, 'Math.PI')
+    .replace(/e/gi, 'Math.E')
+    .replace(/\/+/g, '/')
+    .replace(/\++/g, '+')
+    .replace(/-+/g, '-')
+
+  let format = val
+    .replace(/Math\.PI/g, 'π')
+    .replace(/Math\.E/g, 'e')
+    .replace(/\//g, '÷')
+    .replace(/\*/g, '×')
+
+  try {
+    let result = (new Function('return ' + val))()
+    if (result === undefined) throw result
+    ctx.reply(`${format} = _${result}_`, { parse_mode: 'Markdown' })
+  } catch (e) {
+    if (e == undefined) {
+      return ctx.reply('📌 هات عدد أو معادلة صحيحة، مثال:\n`/احسب 5+5` أو `/احسب 5×5`', { parse_mode: 'Markdown' })
+    }
+    return ctx.reply('❌ تنسيق غير صحيح.\nاستخدم فقط: 0-9 و -, +, *, /, ×, ÷, π, e, (, )')
+  }
+})
+
+// تشغيل البوت()
+
+
+bot.command(["toanime", "انمي"], async (ctx) => {
+  try {
+    const reply = ctx.message.reply_to_message;
+    if (!reply || !reply.photo) {
+      return ctx.reply("⌗ ✧︙قم بالرد على صورة للتحويل ✨🎭");
+    }
+
+    await ctx.reply("⏱️ جاري تحويل الصورة لأنمي...");
+
+    // إعدادات WebSocket
+    const WS_URL = "wss://pixnova.ai/demo-photo2anime/queue/join";
+    const IMAGE_URL = "https://oss-global.pixnova.ai/";
+    const SESSION = crypto.randomBytes(5).toString("hex").slice(0, 9);
+
+    let wss;
+    let promise;
+
+    function _connect() {
+      return new Promise((resolve, reject) => {
+        wss = new WebSocket(WS_URL);
+        wss.on("open", () => resolve());
+        wss.on("error", reject);
+        wss.on("message", (chunk) => {
+          const data = JSON.parse(chunk.toString());
+          if (promise && promise.once) {
+            promise.call(data);
+            promise = null;
+          } else if (promise && !promise.once) {
+            if (data?.code == 200 && data?.success) {
+              data.output.result = data.output.result.map(r => IMAGE_URL + r);
+              promise.call(data);
+              promise = null;
+            }
+          }
+        });
+      });
+    }
+
+    function _send(payload, pr) {
+      return new Promise(resolve => {
+        wss.send(JSON.stringify(payload));
+        promise = { once: pr, call: resolve };
+      });
+    }
+
+    async function PixNova(data, buffer) {
+      const base64Image = buffer.toString("base64");
+      await _connect();
+      await _send({ session_hash: SESSION }, true);
+      const payload = {
+        data: {
+          source_image: `data:image/jpeg;base64,${base64Image}`,
+          strength: data.strength || 0.6,
+          prompt: data.prompt,
+          negative_prompt: data.negative,
+          request_from: 2
+        }
+      };
+      return await _send(payload, false);
+    }
+
+    // التعامل مع فولدر temp
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const tempDir = path.join(__dirname, "temp");
+
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+
+    // تنزيل الصورة في temp
+    const fileId = reply.photo[reply.photo.length - 1].file_id;
+    const fileLink = await ctx.telegram.getFileLink(fileId);
+    const res = await fetch(fileLink.href);
+    const buffer = Buffer.from(await res.arrayBuffer());
+
+    const tempPath = path.join(tempDir, `toanime_${Date.now()}.jpg`);
+    fs.writeFileSync(tempPath, buffer);
+
+    try {
+      const DATA = {
+        prompt: "(masterpiece), best quality",
+        negative: "(worst quality, low quality:1.4), blurry, watermark, text, cropped",
+        strength: 0.6
+      };
+
+      const result = await PixNova(DATA, buffer);
+
+      await ctx.replyWithPhoto({ url: result.output.result[0] }, { caption: "✨ ⌗ تم التحويل إلى أنمي بنجاح 🎭" });
+
+    } catch (e) {
+      console.error(e);
+      ctx.reply("🌷 حصل خطأ أثناء تحويل الصورة ❌");
+    } finally {
+      // مسح الصورة من temp
+      fs.unlinkSync(tempPath);
+    }
+
+  } catch (err) {
+    console.error(err);
+    ctx.reply("🌷 حصل خطأ غير متوقع");
+  }
+});
+
+// دالة رفع على file.io
+async function uploadFileIO(fileUrl) {
+  const response = await axios.get(fileUrl, { responseType: "arraybuffer" });
+  const buffer = Buffer.from(response.data);
+
+  const form = new FormData();
+  form.append("file", buffer, "file.jpg");
+
+  const upload = await axios.post("https://file.io", form, {
+    headers: form.getHeaders(),
+  });
+
+  if (upload.data.success) {
+    return upload.data.link; // الرابط النهائي من file.io
+  } else {
+    throw new Error("فشل الرفع: " + JSON.stringify(upload.data));
+  }
+}
+
+// دالة اختصار الرابط
+async function shortUrl(url) {
+  try {
+    let res = await fetch(`https://tinyurl.com/api-create.php?url=${url}`);
+    if (!res.ok) throw new Error("Failed to shorten URL");
+    return await res.text();
+  } catch (e) {
+    console.error(e);
+    return url;
+  }
+}
+
+const LimitAud = 725 * 1024 * 1024; // 725MB
+const LimitVid = 425 * 1024 * 1024; // 425MB
+const youtubeRegexID = /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([a-zA-Z0-9_-]{11})/;
+
+const userRequests = {};
+
+async function searchYT(query, options = {}) {
+  const search = await yts.search({ query, hl: "es", gl: "ES", ...options });
+  return search.videos;
+}
+
+async function getFileSize(url) {
+  try {
+    const response = await fetch(url, { method: "HEAD" });
+    return parseInt(response.headers.get("content-length") || 0);
+  } catch {
+    return 0;
+  }
+}
+
+// 🎵 أوامر تشغيل الصوت / الفيديو
+bot.command(["p", "play2", "play3", "play4", "musica", "video"], async (ctx) => {
+  const text = ctx.message.text.split(" ").slice(1).join(" ");
+  const command = ctx.message.text.split(" ")[0].replace("/", "");
+
+  if (!text) {
+    return ctx.reply(
+      `🤔 اكتب اسم الفيديو الي بتدور عليه ؟`
+    );
+  }
+
+  if (userRequests[ctx.from.id]) {
+    return ctx.reply(`🌷 Hey @${ctx.from.username || ctx.from.id}, espera 🙄`);
+  }
+  userRequests[ctx.from.id] = true;
+
+  try {
+    let videoIdToFind = text.match(youtubeRegexID) || null;
+    const yt_play = await searchYT(text);
+    let ytplay2 = await yts(
+      videoIdToFind === null ? text : "https://youtu.be/" + videoIdToFind[1]
+    );
+
+    if (videoIdToFind) {
+      const videoId = videoIdToFind[1];
+      ytplay2 =
+        ytplay2.all.find((item) => item.videoId === videoId) ||
+        ytplay2.videos.find((item) => item.videoId === videoId);
+    }
+    ytplay2 = ytplay2.all?.[0] || ytplay2.videos?.[0] || ytplay2;
+
+    // أنظمة حسب الأمر
+    switch (command) {
+      case "p":
+      case "musica": {
+        const data = await mohnd.download(yt_play[0].url, "mp3");
+        const fileSize = await getFileSize(data.result.download);
+        if (fileSize > LimitAud) {
+          await ctx.replyWithDocument({ url: data.result.download }, { caption: yt_play[0].title });
+        } else {
+          await ctx.replyWithAudio({ url: data.result.download }, { caption: yt_play[0].title });
+        }
+        break;
+      }
+
+      case "play2":
+      case "video": {
+        const data = await mohnd.download(yt_play[0].url, "720");
+        const fileSize = await getFileSize(data.result.download);
+        if (fileSize > LimitVid) {
+          await ctx.replyWithDocument({ url: data.result.download }, { caption: yt_play[0].title });
+        } else {
+          await ctx.replyWithVideo({ url: data.result.download }, { caption: yt_play[0].title });
+        }
+        break;
+      }
+
+      case "play3": {
+        const data = await mohnd.download(yt_play[0].url, "mp3");
+        await ctx.replyWithDocument({ url: data.result.download }, { caption: yt_play[0].title });
+        break;
+      }
+
+      case "play4": {
+        const data = await mohnd.download(yt_play[0].url, "720");
+        await ctx.replyWithDocument({ url: data.result.download }, { caption: yt_play[0].title });
+        break;
+      }
+    }
+  } catch (err) {
+    console.error(err);
+    ctx.reply("❌ حصل خطأ أثناء التحميل.");
+  } finally {
+    delete userRequests[ctx.from.id];
+  }
+});
+
+// دالة منشن
+function mention(user) {
+  return `<a href="tg://user?id=${user.user.id}">${user.user.first_name}</a>`;
+}
+
+bot.command("mary", async (ctx) => {
+  try {
+    const chatId = ctx.chat.id;
+
+    // هات كل الأعضاء (أدمن + أعضاء عاديين)
+    const admins = await ctx.telegram.getChatAdministrators(chatId);
+
+    if (!admins || admins.length < 2) {
+      return ctx.reply("❌ مفيش أعضاء كفاية في الجروب للعبة.");
+    }
+
+    // نختار شخصين عشوائيين
+    let a = admins[Math.floor(Math.random() * admins.length)];
+    let b;
+    do {
+      b = admins[Math.floor(Math.random() * admins.length)];
+    } while (b.user.id === a.user.id);
+
+    // الرد
+    const text = `
+	${mention(a)}
+	اديلو ادي 🙃😂
+	${mention(b)}
+	عقبال ما تجيبو كتاكيت تملا البار بتاعنا 🥹😂
+
+`;
+
+    await ctx.reply(text, { parse_mode: "HTML" });
+  } catch (err) {
+    console.error(err);
+    ctx.reply("🌷 حصل خطأ، جرب تاني.");
+  }
+});
+
+
+const tmpDir = path.join(process.cwd(), "tmp");
+if (!fs.existsSync(tmpDir)) {
+  fs.mkdirSync(tmpDir);
+}
+
+// أمر الهجاب
+bot.command("hijab", async (ctx) => {
+  try {
+    const reply = ctx.message.reply_to_message;
+
+    // لازم يكون فيه صورة
+    if (!reply || !reply.photo || reply.photo.length === 0) {
+      return ctx.reply(
+        "📸 *من فضلك رد على صورة باستخدام الأمر* `/hijab`",
+        { parse_mode: "Markdown" }
+      );
+    }
+
+    await ctx.reply("⏳ جاري معالجة الصورة، برجاء الانتظار...");
+
+    // تحميل الصورة من تليجرام
+    const fileId = reply.photo[reply.photo.length - 1].file_id;
+    const fileUrl = await ctx.telegram.getFileLink(fileId);
+    const imgRes = await axios.get(fileUrl.href, { responseType: "arraybuffer" });
+
+    // تجهيز الفورم داتا
+    const form = new FormData();
+    form.append("image", imgRes.data, {
+      filename: "upload.jpg",
+      contentType: "image/jpeg",
+    });
+
+    // استدعاء API
+    const response = await axios.post("https://xyro.site/fun/hijabkan", form, {
+      headers: form.getHeaders(),
+      responseType: "arraybuffer",
+    });
+
+    // حفظ مؤقت
+    const tempPath = path.join(tmpDir, `result_${Date.now()}.jpg`);
+    fs.writeFileSync(tempPath, response.data);
+
+    // إرسال الصورة المعدلة
+    await ctx.replyWithPhoto(
+      { source: tempPath },
+      { caption: "✅ تمت المعالجة بنجاح" }
+    );
+
+    // حذف الملف بعد 30 ثانية
+    setTimeout(() => {
+      try {
+        fs.unlinkSync(tempPath);
+      } catch (e) {
+        console.error("خطأ أثناء مسح الملف:", e);
+      }
+    }, 30000);
+
+  } catch (error) {
+    console.error("[HIJABKAN ERROR]", error);
+
+    let errorMessage = "❌ فشل في معالجة الصورة";
+    if (error.response) {
+      try {
+        errorMessage =
+          error.response.data?.message ||
+          error.response.statusText ||
+          "خطأ من API";
+      } catch {
+        errorMessage = "استجابة غير مفهومة من السيرفر";
+      }
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+
+    ctx.reply(`⚠️ ${errorMessage}`);
+  }
+});
+
+
+// مصفوفة الكلمات المفتاحية الإسلامية
+const searchQueries = ["حديث", "الرسول صلى الله عليه وسلم", "حديث شريف", "حديث نبوي"];
+
+// دالة تجيب فيديو عشوائي
+async function fetchRandomVideo() {
+  const searchQuery =
+    searchQueries[Math.floor(Math.random() * searchQueries.length)];
+
+  let { data: response } = await axios.get(
+    "https://apis-starlights-team.koyeb.app/starlight/tiktoksearch?text=" +
+      searchQuery
+  );
+
+  const searchResults = response.data;
+  if (!searchResults || searchResults.length === 0) return null;
+
+  // اختيار فيديو عشوائي
+  const randomResult =
+    searchResults[Math.floor(Math.random() * searchResults.length)];
+
+  return {
+    url: randomResult.nowm,
+    title: randomResult.title || "🎥 فيديو عشوائي",
+    query: searchQuery,
+  };
+}
+
+// الأمر الأساسي
+bot.command(["دين", "ahades", "تصفح2"], async (ctx) => {
+  const video = await fetchRandomVideo();
+  if (!video) return ctx.reply("❌ لم أتمكن من جلب فيديو الآن.");
+
+  await ctx.replyWithVideo(
+    { url: video.url },
+    {
+      caption: `🔎 ${video.query}\n\n📌 ${video.title}`,
+      parse_mode: "Markdown",
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback("🎬 فيديو كمان", "more_video")],
+      ]),
+    }
+  );
+});
+
+// زر "فيديو كمان"
+bot.action("more_video", async (ctx) => {
+  await ctx.answerCbQuery(); // عشان يختفي اللودينج
+  const video = await fetchRandomVideo();
+  if (!video) return ctx.reply("❌ لم أتمكن من جلب فيديو الآن.");
+
+  await ctx.replyWithVideo(
+    { url: video.url },
+    {
+      caption: `🔎 ${video.query}\n\n📌 ${video.title}`,
+      parse_mode: "Markdown",
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback("🎬 فيديو كمان", "more_video")],
+      ]),
+    }
+  );
+});
+
+const rednoteDownloader = {
+  getToken: async function () {
+    const req = await fetch("https://anydownloader.com/en/xiaohongshu-videos-and-photos-downloader");
+    if (!req.ok) return null;
+
+    const res = await req.text();
+    const $ = cheerio.load(res);
+    const token = $("#token").val();
+
+    return { token };
+  },
+
+  calculateHash: function (url, salt) {
+    return Buffer.from(url).toString("base64") + (url.length + 1000) + Buffer.from(salt).toString("base64");
+  },
+
+  download: async function (url) {
+    const conf = await rednoteDownloader.getToken();
+    if (!conf) return { error: "❌ فشل في الحصول على التوكن من الموقع.", result: {} };
+
+    const { token } = conf;
+    const hash = rednoteDownloader.calculateHash(url, "aio-dl");
+
+    const data = new URLSearchParams();
+    data.append("url", url);
+    data.append("token", token);
+    data.append("hash", hash);
+
+    const req = await fetch(`https://anydownloader.com/wp-json/aio-dl/video-data/`, {
+      method: "POST",
+      headers: {
+        "Accept": "*/*",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "Origin": "https://anydownloader.com",
+        "Referer": "https://anydownloader.com/en/xiaohongshu-videos-and-photos-downloader",
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+        "X-Requested-With": "XMLHttpRequest"
+      },
+      body: data
+    });
+
+    if (!req.ok) return { error: "⚠️ حدث خطأ أثناء إرسال الطلب.", result: {} };
+
+    try {
+      const json = await req.json();
+      return {
+        input_url: url,
+        source: json.source,
+        result: {
+          title: json.title,
+          duration: json.duration,
+          thumbnail: json.thumbnail,
+          downloadUrls: json.medias
+        },
+        error: null
+      };
+    } catch (e) {
+      return { error: "⚠️ خطأ أثناء تحويل الاستجابة إلى JSON", result: {} };
+    }
+  }
+};
+
+// ========== Telegram Command ==========
+bot.command("anydownloader", async (ctx) => {
+  const args = ctx.message.text.split(" ").slice(1);
+  const url = args[0];
+
+  if (!url) {
+    return ctx.reply(
+`❗ *طريقة الاستخدام:*
+اكتب الأمر متبوعًا برابط الفيديو:
+
+مثال:
+\`/anydownloader https://xhslink.com/a/xxxxx\`
+
+🌐 *المنصات المدعومة:*
+- Instagram
+- Facebook
+- Pinterest
+- TikTok
+- Twitter
+- Likee
+- Roposo
+- ShareChat
+- SnackVideo
+- Vimeo
+- YouTube Shorts
+- Douyin
+- Xiaohongshu (RED)
+- IMDB
+- Reddit`, { parse_mode: "Markdown" });
+  }
+
+  await ctx.reply("🔄 جاري التحميل، انتظر قليلاً...");
+
+  try {
+    const res = await rednoteDownloader.download(url);
+    if (res.error) return ctx.reply(`❌ خطأ: ${res.error}`);
+
+    let message = `✅ *تم جلب معلومات الفيديو*\n\n`;
+    message += `📄 *العنوان:* ${res.result.title}\n`;
+    message += `⏱ *المدة:* ${res.result.duration}\n`;
+
+    const media = res.result.downloadUrls?.[0];
+    if (!media?.url) return ctx.reply("❌ لم يتم العثور على رابط التحميل.");
+
+    await ctx.replyWithVideo({ url: media.url }, { caption: message, parse_mode: "Markdown" });
+  } catch (err) {
+    console.error(err);
+    ctx.reply("⚠️ حدث خطأ أثناء التحميل.");
+  }
+});
+
+// هنخزن البوتات الفرعية هنا
+// أمر: /حب @username
+bot.command("love", async (ctx) => {
+  const reply = ctx.message.reply_to_message;
+  const text = ctx.message.text.split(" ").slice(1).join(" ");
+  let userId;
+
+  // تحديد الهدف (mention, reply, id)
+  if (reply) {
+    userId = reply.from.id;
+  } else if (ctx.message.entities && ctx.message.entities[1]?.type === "mention") {
+    userId = text.replace("@", "");
+  } else if (!isNaN(text)) {
+    userId = text;
+  }
+
+  if (!userId) {
+    return ctx.reply("📌 لازم ترد على شخص أو تذكره أو تكتب الـ ID.");
+  }
+
+  const senderId = ctx.from.id;
+
+  // لو المستخدم بيحاول يحب نفسه
+  if (userId == senderId) {
+    return ctx.reply("❌ مينفعش تحب نفسك 😂");
+  }
+
+  // لو المستخدم بيحاول يحب البوت
+  if (userId == ctx.botInfo.id) {
+    return ctx.reply("😳 انا بوت مش ينفع نرتبط 🥲");
+  }
+
+  // رسالة طلب مع زرارين
+  await ctx.replyWithMarkdown(
+    `💌 [${ctx.from.first_name}](tg://user?id=${senderId}) بيقول: هل تقبل أن تكون شريك حياتي؟`,
+    Markup.inlineKeyboard([
+      [Markup.button.callback("🟢 موافقة", `accept_${senderId}_${userId}`)],
+      [Markup.button.callback("🔴 رفض", `reject_${senderId}_${userId}`)],
+    ])
+  );
+});
+
+// 📍 زر الموافقة
+bot.action(/accept_(\d+)_(\d+)/, async (ctx) => {
+  const senderId = ctx.match[1];
+  const userId = ctx.match[2];
+
+  if (ctx.from.id.toString() !== userId) {
+    return ctx.answerCbQuery("⚠️ مش إنت اللي اتطلب منك!");
+  }
+
+  global.db.data.users[userId] ??= {};
+  global.db.data.users[senderId] ??= {};
+
+  global.db.data.users[userId].pasangan = senderId;
+  global.db.data.users[senderId].pasangan = userId;
+
+  await ctx.editMessageText(
+    `💖 [${ctx.from.first_name}](tg://user?id=${userId}) وافق/ت على طلب [${senderId}](tg://user?id=${senderId})! 🎉`
+  );
+});
+
+// 📍 زر الرفض
+bot.action(/reject_(\d+)_(\d+)/, async (ctx) => {
+  const senderId = ctx.match[1];
+  const userId = ctx.match[2];
+
+  if (ctx.from.id.toString() !== userId) {
+    return ctx.answerCbQuery("⚠️ مش إنت اللي اتطلب منك!");
+  }
+
+  global.db.data.users[userId] ??= {};
+  global.db.data.users[senderId] ??= {};
+
+  global.db.data.users[userId].pasangan = "";
+  global.db.data.users[senderId].pasangan = "";
+
+  await ctx.editMessageText(
+    `💔 [${ctx.from.first_name}](tg://user?id=${userId}) رفض/ت طلب [${senderId}](tg://user?id=${senderId}) 😢`
+  );
+});
+// نخزن البوتات الفرعية
+
+// تشغيل البوت الأس
+
+bot.command("to_mp3", async (ctx) => {
+  try {
+    const reply = ctx.message.reply_to_message;
+
+    if (!reply || (!reply.video && !reply.voice && !reply.audio)) {
+      return ctx.reply("❌ اعمل ريبلاي للفيديو او الريك اللي عاوز تحولو لصوت 🌷");
+    }
+
+    // جلب الملف
+    let fileId;
+    if (reply.video) fileId = reply.video.file_id;
+    else if (reply.voice) fileId = reply.voice.file_id;
+    else if (reply.audio) fileId = reply.audio.file_id;
+
+    const fileLink = await ctx.telegram.getFileLink(fileId);
+    const response = await fetch(fileLink.href);
+    const buffer = Buffer.from(await response.arrayBuffer());
+
+    // مسار الملف المؤقت (UUID عشان ميحصلش تضارب)
+    const tempDir = "./temp";
+    const filePath = path.join(tempDir, `temp_${Date.now()}.mp3`);
+
+    // إنشاء فولدر temp لو مش موجود
+    try {
+      await fs.mkdir(tempDir, { recursive: true });
+    } catch {}
+
+    // حفظ الملف
+    await fs.writeFile(filePath, buffer);
+
+    // إرسال الصوت كـ MP3 من الملف المحلي
+    await ctx.replyWithAudio(
+      { source: filePath },
+      { caption: "🌷 تم التحويل إلى MP3", title: "Converted Audio", performer: "Bot" }
+    );
+
+    // مسح الملف بعد الإرسال
+    await fs.unlink(filePath);
+
+  } catch (err) {
+    console.error(err);
+    ctx.reply("❌ حصل خطأ أثناء التحويل.");
+  }
+});
+
+bot.command(["toimg", "تحويل_لصورة"], async (ctx) => {
+  try {
+    const reply = ctx.message.reply_to_message;
+
+    if (!reply || !reply.sticker) {
+      return ctx.reply("⌗ من فضلك قم بالرد على استيكر 🎭");
+    }
+
+    if (!fs.existsSync("./temp")) fs.mkdirSync("./temp");
+
+    // تحميل الاستيكر
+    const fileId = reply.sticker.file_id;
+    const fileLink = await ctx.telegram.getFileLink(fileId);
+    const res = await fetch(fileLink.href);
+    const buffer = Buffer.from(await res.arrayBuffer());
+
+    // مسار الملفات المؤقتة
+    const rand = Math.floor(Math.random() * 1000000 + 1);
+    const pathWebp = `./temp/${rand}.webp`;
+    const pathImg = `./temp/${rand}.jpg`;
+
+    fs.writeFileSync(pathWebp, buffer);
+
+    // تحويل webp → jpg
+    exec(`convert ${pathWebp} ${pathImg}`, async (err) => {
+      try {
+        if (err || !fs.existsSync(pathImg)) {
+          fs.unlinkSync(pathWebp);
+          return ctx.reply("❌ فشل التحويل إلى صورة!");
+        }
+
+        await ctx.replyWithPhoto(
+          { source: fs.createReadStream(pathImg) },
+          { caption: "🌷 تم تحويل الاستيكر إلى صورة" }
+        );
+
+        // حذف الملفات بعد الإرسال
+        fs.unlinkSync(pathWebp);
+        fs.unlinkSync(pathImg);
+      } catch (e) {
+        console.error(e);
+        ctx.reply("🌷 حصل خطأ أثناء إرسال الصورة.");
+      }
+    });
+  } catch (e) {
+    console.error(e);
+    ctx.reply("❌ حصل خطأ أثناء التحويل.");
+  }
+});
+// أمر "زواج"
+
+bot.command("to_mp3", async (ctx) => {
+  try {
+    const reply = ctx.message.reply_to_message;
+
+    if (!reply || (!reply.video && !reply.voice && !reply.audio)) {
+      return ctx.reply("❌ اعمل ريبلاي للفيديو او الريك اللي عاوز تحولو لصوت 🌷");
+    }
+
+    // جلب file_id
+    let fileId;
+    if (reply.video) fileId = reply.video.file_id;
+    else if (reply.voice) fileId = reply.voice.file_id;
+    else if (reply.audio) fileId = reply.audio.file_id;
+
+    // هنا بنستعمل الفنكشن الجاهزة
+    const buffer = await getBuffer(ctx, fileId)
+
+    // رفع الملف
+    const link = await uploadFile(buffer)
+
+    if (!link) {
+      return ctx.reply("❌ حصل خطأ أثناء الرفع.");
+    }
+
+    // إرسال الصوت
+    await ctx.replyWithAudio(
+      { url: link, filename: "shawaza_zizo_2024.mp3" },
+      { caption: "🌷 تم التحويل إلى MP3" }
+    );
+
+  } catch (err) {
+    console.error(err);
+    ctx.reply("❌ حصل خطأ أثناء التحويل.");
+  }
+});
+
+
+// ========= Helpers =========
+function randomIP() {
+  return Array(4).fill(0).map(() => Math.floor(Math.random() * 256)).join('.')
+}
+
+function randomUserAgent() {
+  const userAgents = [
+    'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Android 12; Mobile; rv:102.0) Gecko/102.0 Firefox/102.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Safari/605.1.15'
+  ]
+  return userAgents[Math.floor(Math.random() * userAgents.length)]
+}
+
+const sessionIP = randomIP()
+const sessionUA = randomUserAgent()
+
+function getBaseHeaders() {
+  return {
+    'origin': 'https://pixnova.ai',
+    'referer': 'https://pixnova.ai/',
+    'accept-language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+    'accept': 'application/json, text/plain, */*',
+    'user-agent': sessionUA,
+    'X-Forwarded-For': sessionIP,
+    'Client-IP': sessionIP
+  }
+}
+
+async function uploadImageFromBuffer(buffer) {
+  const stream = Readable.from(buffer)
+  const form = new FormData()
+  form.append('file', stream, { filename: 'image.jpg' })
+  form.append('fn_name', 'demo-photo2anime')
+  form.append('request_from', '2')
+  form.append('origin_from', '111977c0d5def647')
+
+  const upload = await axios.post('https://api.pixnova.ai/aitools/upload-img', form, {
+    headers: { ...getBaseHeaders(), ...form.getHeaders() }
+  })
+  return upload.data?.data?.path
+}
+
+async function createTask(sourceImage) {
+  const payload = {
+    fn_name: 'demo-photo2anime',
+    call_type: 3,
+    input: {
+      source_image: sourceImage,
+      strength: 0.6,
+      prompt: 'use anime style, hd, 8k, smooth, aesthetic',
+      negative_prompt: '(worst quality, low quality:1.4), blurry, watermark, text, extra arm, extra leg'
+    },
+    request_from: 2,
+    origin_from: '111977c0d5def647'
+  }
+
+  const res = await axios.post('https://api.pixnova.ai/aitools/of/create', payload, {
+    headers: { ...getBaseHeaders(), 'content-type': 'application/json' }
+  })
+  return res.data?.data?.task_id
+}
+
+async function waitForResult(taskId) {
+  const payload = {
+    task_id: taskId,
+    fn_name: 'demo-photo2anime',
+    call_type: 3,
+    request_from: 2,
+    origin_from: '111977c0d5def647'
+  }
+
+  const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+  for (let i = 1; i <= 30; i++) {
+    const check = await axios.post('https://api.pixnova.ai/aitools/of/check-status', payload, {
+      headers: { ...getBaseHeaders(), 'content-type': 'application/json' }
+    })
+
+    const data = check.data?.data
+    if (data?.status === 2 && data?.result_image) {
+      return data.result_image.startsWith('http')
+        ? data.result_image
+        : `https://oss-global.pixnova.ai/${data.result_image}`
+    }
+
+    await delay(2000)
+  }
+
+  return null
+}
+
+async function convertToPNG(url) {
+  const res = await fetch(url)
+  const arrayBuffer = await res.arrayBuffer()
+  const webpBuffer = Buffer.from(arrayBuffer)
+  return await sharp(webpBuffer).png().toBuffer()
+}
+
+// ========= Telegram Command =========
+bot.command("photo2anime", async (ctx) => {
+  try {
+    const reply = ctx.message.reply_to_message
+    if (!reply || !reply.photo) {
+      return ctx.reply("📌 من فضلك رد على صورة بالأمر `/photo2anime`", { parse_mode: "Markdown" })
+    }
+
+    ctx.reply("🎨 جاري تحويل صورتك إلى أنمي...")
+
+    // حمل الصورة من تيليجرام
+    const fileId = reply.photo[reply.photo.length - 1].file_id
+    const fileLink = await ctx.telegram.getFileLink(fileId)
+    const res = await fetch(fileLink.href)
+    const buffer = Buffer.from(await res.arrayBuffer())
+
+    // رفع الصورة + إنشاء مهمة
+    const sourceImage = await uploadImageFromBuffer(buffer)
+    const taskId = await createTask(sourceImage)
+    const resultUrl = await waitForResult(taskId)
+
+    if (!resultUrl) return ctx.reply("❌ فشل في توليد الصورة.")
+
+    const pngBuffer = await convertToPNG(resultUrl)
+
+    await ctx.replyWithPhoto({ source: pngBuffer }, { caption: "✨ ها هي صورتك بعد التحويل إلى أنمي!" })
+  } catch (err) {
+    console.error("❌ خطأ:", err)
+    ctx.reply("❌ حدث خطأ أثناء معالجة الصورة.")
+  }
+});
+
+let currentPage = 1;
+
+// 🔎 أمر البحث عن الأفلام
+bot.command(["film"], async (ctx) => {
+  const query = ctx.message.text.split(" ").slice(1).join(" ");
+  if (!query) {
+    return ctx.reply("🔱 قم بإدخال اسم الفيلم للبحث.\n\n📌 مثال:\n/سينما_بلس avatar");
+  }
+
+  await ctx.reply("🔎 جاري البحث عن الفيلم...");
+
+  let نتائج;
+  try {
+    نتائج = await searchC(query);
+  } catch {
+    نتائج = await searchTMDB(query);
+  }
+
+  if (!نتائج || نتائج.length === 0) {
+    return ctx.reply("🔱 لم أجد ما طلبته أو لا توجد نتائج أخرى للفيلم المطلوب.");
+  }
+
+  const result = نتائج[0];
+  const صورة = result.poster_path
+    ? `https://image.tmdb.org/t/p/w500/${result.poster_path}`
+    : "https://elcomercio.pe/resizer/RJM30xnujgfmaODGytH1rRVOrAA=/400x0/smart/filters:format(jpeg):quality(75)/arc-anglerfish-arc2-prod-elcomercio.s3.amazonaws.com/public/BJ2L67XNRRGHTFPKPDOEQ2AH5Y.jpg";
+
+  const caption = `*🎬 • العنوان:* ${result.title}\n\n🔗 *رابط الفيلم:* ${result.link}`;
+
+  await ctx.replyWithPhoto(
+    { url: صورة },
+    {
+      caption,
+      parse_mode: "Markdown",
+      ...Markup.inlineKeyboard([
+        [
+          Markup.button.callback(
+            "🔱 بحث آخر",
+            `search_more_${query}_${currentPage + 1}`
+          ),
+        ],
+        [Markup.button.url("🔗 رابط الفيلم", result.link)],
+        [
+          Markup.button.url(
+            "🌷 قناة البوت",
+            "https://t.me/Terbo888xxx"
+          ),
+        ],
+      ]),
+    }
+  );
+
+  currentPage++;
+});
+
+// 🌀 هاندلر لزرار "بحث آخر"
+bot.action(/search_more_(.+)_(\d+)/, async (ctx) => {
+  const query = ctx.match[1];
+  const page = parseInt(ctx.match[2]);
+
+  let نتائج;
+  try {
+    نتائج = await searchC(query, page);
+  } catch {
+    نتائج = await searchTMDB(query, page);
+  }
+
+  if (!نتائج || نتائج.length === 0) {
+    return ctx.answerCbQuery("❌ لا يوجد نتائج إضافية.");
+  }
+
+  const result = نتائج[0];
+  const صورة = result.poster_path
+    ? `https://image.tmdb.org/t/p/w500/${result.poster_path}`
+    : "https://elcomercio.pe/resizer/RJM30xnujgfmaODGytH1rRVOrAA=/400x0/smart/filters:format(jpeg):quality(75)/arc-anglerfish-arc2-prod-elcomercio.s3.amazonaws.com/public/BJ2L67XNRRGHTFPKPDOEQ2AH5Y.jpg";
+
+  await ctx.replyWithPhoto(
+    { url: صورة },
+    {
+      caption: `*🎬 • العنوان:* ${result.title}\n\n🔗 *رابط الفيلم:* ${result.link}`,
+      parse_mode: "Markdown",
+      ...Markup.inlineKeyboard([
+        [
+          Markup.button.callback(
+            "🔱 بحث آخر",
+            `search_more_${query}_${page + 1}`
+          ),
+        ],
+        [Markup.button.url("🔗 رابط الفيلم", result.link)],
+      ]),
+    }
+  );
+  ctx.answerCbQuery();
+});
+
+// 🛠️ دوال البحث
+async function safeLoad(url, options = {}) {
+  try {
+    const { data: pageData } = await axios.get(url, options);
+    const $ = load(pageData);
+    return $;
+  } catch (err) {
+    throw err;
+  }
+}
+
+async function searchC(query, numberPage = 1) {
+  const $ = await safeLoad(`https://cuevana3.mu/page/${numberPage}/`, {
+    params: { s: query },
+  });
+  const resultSearch = [];
+  $(".results-post > article").each((_, e) => {
+    const element = $(e);
+    const title = element.find("header > h2").text();
+    const link = element.find(".lnk-blk").attr("href");
+    resultSearch.push({ title, link });
+  });
+  return resultSearch;
+}
+
+async function searchTMDB(query, page = 1) {
+  const apiKey = "90f6e472836201538985de05c8bbd385";
+  const response = await axios.get(
+    `https://api.themoviedb.org/3/search/movie`,
+    {
+      params: { api_key: apiKey, query, page },
+    }
+  );
+  return response.data.results.map((movie) => ({
+    title: movie.title,
+    link: `https://www.themoviedb.org/movie/${movie.id}`,
+    poster_path: movie.poster_path,
+  }));
+}
+
+// مصفوفة نخزن فيها كل الأعضاء اللي ظهروا في الجروب
+
+
+const Murottal = {
+  async list() {
+    try {
+      let res = await axios.get("https://www.assabile.com/yasser-al-dosari-52/yasser-al-dosari.htm", {
+        headers: {
+          "user-agent": "Mozilla/5.0",
+        },
+      });
+
+      const $ = cheerio.load(res.data);
+      let list = [];
+
+      $(".playlist li a").each((i, el) => {
+        const name = $(el).text().trim();
+        const href = $(el).attr("href");
+        if (href && name) list.push({ span_name: name, href });
+      });
+
+      return list;
+    } catch (error) {
+      console.error("❌ Error fetching list:", error.message);
+      return [];
+    }
+  },
+
+  async audio(href) {
+    try {
+      let res = await axios.get(`https://www.assabile.com${href}`, {
+        headers: {
+          "user-agent": "Mozilla/5.0",
+        },
+      });
+
+      const $ = cheerio.load(res.data);
+      const audioUrl = $("#recitation source").attr("src");
+      return audioUrl || null;
+    } catch (error) {
+      console.error("❌ Error fetching audio:", error.message);
+      return null;
+    }
+  },
+};
+
+bot.command("quran", async (ctx) => {
+  try {
+    const list = await Murottal.list();
+    if (list.length === 0) return ctx.reply("⚠️ لم يتم العثور على أي سور.");
+
+    const buttons = list.slice(0, 15).map((s) =>
+      [Markup.button.callback(s.span_name, `play_${s.href}`)]
+    );
+
+    await ctx.reply("📖 اختر السورة من القائمة:", Markup.inlineKeyboard(buttons));
+  } catch (e) {
+    console.error(e);
+    ctx.reply("🚨 حدث خطأ أثناء جلب القائمة.");
+  }
+});
+
+bot.on("callback_query", async (ctx) => {
+  const data = ctx.callbackQuery.data;
+
+  if (data.startsWith("play_")) {
+    const href = data.replace("play_", "");
+    const audioUrl = await Murottal.audio(href);
+
+    if (!audioUrl) return ctx.answerCbQuery("❌ فشل في جلب التلاوة.");
+
+    await ctx.replyWithAudio({ url: audioUrl });
+    ctx.answerCbQuery();
+  }
+});
+
+
+
+bot.command(["divorce", "الطلاق"], async (ctx) => {
+  try {
+    const chatId = ctx.chat.id;
+
+    // نجيب أعضاء الجروب (لازم البوت يكون أدمن)
+    const members = await ctx.telegram.getChatAdministrators(chatId);
+    let participants = members.map((m) => m.user);
+
+    if (participants.length < 2) {
+      return ctx.reply("❌ مش كفاية أعضاء للطلاق 😂");
+    }
+
+    // نختار اتنين عشوائي
+    let a = participants[Math.floor(Math.random() * participants.length)];
+    let b;
+    do {
+      b = participants[Math.floor(Math.random() * participants.length)];
+    } while (b.id === a.id);
+
+    // دالة المنشن بالاسم + id
+    let toM = (user) => `[${user.first_name}](tg://user?id=${user.id})`;
+
+    await ctx.replyWithMarkdown(
+      `💔 خبر عاجل: ${toM(a)} طلق ${toM(b)} 🙃😂د\n\n` +
+      `😢 محدش يزعل يا جماعة، دي مجرد لعبة 👾`
+    );
+  } catch (err) {
+    console.error(err);
+    ctx.reply("🌷 حصل خطأ، جرب تاني.");
+  }
+});
+
+
+function getRandom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+bot.command("marry_me", async (ctx) => {
+  if (ctx.chat.type !== "supergroup") {
+    return ctx.reply("❌ هذا الأمر يعمل فقط داخل المجموعات.");
+  }
+
+  // نجمع كل الأعضاء (لازم البوت يكون عنده صلاحية getChatMember)
+  const memberCount = await ctx.getChatMembersCount();
+  const members = [];
+
+  for (let i = 0; i < memberCount; i++) {
+    try {
+      const member = await ctx.getChatMember(i);
+      if (member && member.user && !member.user.is_bot) {
+        members.push(member.user);
+      }
+    } catch (e) {
+      continue;
+    }
+  }
+
+  if (members.length < 2) {
+    return ctx.reply("⚠️ عدد الأعضاء غير كافي لتشغيل اللعبة.");
+  }
+
+  let a = getRandom(members);
+  let b;
+  do {
+    b = getRandom(members);
+  } while (b.id === a.id);
+
+  const user = ctx.from;
+
+  ctx.reply(
+    `@${user.username || user.id}  \`『 اي رايك في المزه دي 😹💗 』\`د  @${b.username || b.id}, 🥺`,
+    {
+      parse_mode: "Markdown",
+      reply_to_message_id: ctx.message.message_id
+    }
+  );
+});
+bot.command("link", async (ctx) => {
+  try {
+    const chat = await ctx.getChat();
+
+    if (chat.type !== "supergroup" && chat.type !== "group" && chat.type !== "channel") {
+      return ctx.reply("❌ هذا الأمر يعمل فقط داخل القنوات أو الجروبات");
+    }
+
+    const chatTitle = chat.title || "غير معروف";
+    const chatDesc = chat.description || "لا يوجد وصف متاح";
+    const chatUsername = chat.username ? `@${chat.username}` : "❌ لا يوجد يوزر";
+
+    // الصورة الافتراضية
+    let photoUrl = "https://files.catbox.moe/xsplj9.jpg";
+
+    try {
+      if (chat.photo) {
+        const file = await ctx.telegram.getFile(chat.photo.big_file_id);
+        photoUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${file.file_path}`;
+      }
+    } catch (e) {
+      console.error("خطأ في تحميل صورة الجروب:", e);
+    }
+
+    // رابط الدعوة أو رابط القناة
+    let inviteLink;
+    if (chat.type === "supergroup" || chat.type === "group") {
+      try {
+        inviteLink = await ctx.telegram.exportChatInviteLink(chat.id);
+      } catch {
+        inviteLink = "❌ لا يمكن إنشاء رابط (البوت ليس أدمن)";
+      }
+    } else {
+      inviteLink =
+        chat.username != null
+          ? `https://t.me/${chat.username}`
+          : "❌ لا يوجد رابط مباشر";
+    }
+
+    const caption = `
+┏━━━━━━❰･𓃦･❱━━━━━━┓
+> ≡ ◡̈⃝❯ 『 الاسم 』: ${chatTitle}
+> ≡ ◡̈⃝❯ 『 اليوزر 』: ${chatUsername}
+> ≡ ◡̈⃝❯ 『 الوصف 』: ${chatDesc}
+┗━━━━━━❰･𓃠･❱━━━━━━┛
+    `;
+
+    await ctx.replyWithPhoto(photoUrl, {
+      caption,
+      parse_mode: "Markdown",
+      ...Markup.inlineKeyboard([[Markup.button.url("📄 الرابط", inviteLink)]])
+    });
+  } catch (e) {
+    console.error("الخطأ:", e);
+    ctx.reply("❌ حصل خطأ أثناء جلب معلومات القناة/الجروب");
+  }
+});
+
+
+
+// رفع الصورة لـ Catbox
+const uploadToCatbox = async (buffer) => {
+  const { ext } = await fileTypeFromBuffer(buffer);
+  const form = new FormData();
+  form.append("fileToUpload", buffer, `file.${ext}`);
+  form.append("reqtype", "fileupload");
+
+  try {
+    const response = await fetch("https://catbox.moe/user/api.php", {
+      method: "POST",
+      body: form,
+    });
+
+    const text = await response.text();
+    if (text.startsWith("https://")) {
+      return text;
+    } else {
+      throw new Error("فشل في رفع الملف: " + text);
+    }
+  } catch (error) {
+    throw new Error(`خطأ أثناء الرفع: ${error.message}`);
+  }
+};
+
+bot.command("zengy", async (ctx) => {
+  try {
+    if (!ctx.message.reply_to_message || !ctx.message.reply_to_message.photo) {
+      return ctx.reply("⚠️ من فضلك رد على صورة عشان أزنجها 🐦‍⬛");
+    }
+
+    await ctx.reply("⏳ يتم التزنيج...");
+
+    // تحميل الصورة
+    const fileId = ctx.message.reply_to_message.photo.pop().file_id;
+    const file = await ctx.telegram.getFile(fileId);
+    const fileUrl = `https://api.telegram.org/file/bot${bot.token}/${file.file_path}`;
+
+    const buffer = await fetch(fileUrl).then((res) => res.buffer());
+
+    // رفع الصورة لـ Catbox
+    const img = await uploadToCatbox(buffer);
+
+    // البـرومبت (ممكن تخليه من المستخدم بدل الثابت)
+    const prompt =
+      "Change only the skin color to black while keeping all other elements exactly same including facial features, lighting, hair, clothing, pose, background and style. Make skin tone look natural with realistic texture.";
+
+    // إرسال الصورة للمعالجة
+    const processResponse = await axios.get(
+      "https://emam-x-api.vercel.app/home/sections/Tools/api/api/process-image",
+      {
+        params: { imageUrl: img, prompt: prompt },
+      }
+    );
+
+    const rid = processResponse.data.recordId;
+    if (!rid) throw new Error("❌ فشل في جلب record ID");
+
+    let resultUrl = null;
+    while (!resultUrl) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+
+      const checkResponse = await axios.get(
+        "https://emam-x-api.vercel.app/home/sections/Tools/api/api/check-result",
+        { params: { rid: rid } }
+      );
+
+      if (checkResponse.data?.completed === true && checkResponse.data?.resultUrl) {
+        resultUrl = checkResponse.data.resultUrl;
+      }
+    }
+
+    // إرسال الصورة الناتجة
+    await ctx.replyWithPhoto({ url: resultUrl }, { caption: "✅ تم التزنيج 🧑🏿‍🦲👍🏿" });
+
+  } catch (e) {
+    console.error(e);
+    ctx.reply("❌ حصل خطأ: " + e.message);
+  }
+});
+
+bot.command("eye", async (ctx) => {
+  const chatId = ctx.chat.id;
+
+  // هنا بتحط السؤال والاختيارات
+  const question = "❓ من تكون هذه الشخصية؟";
+  const options = ["محمد صلاح", "كريستيانو", "ميسي", "زيزو"];
+  const correct = "محمد صلاح";
+
+  await ctx.reply(
+    `🎮 لعبة احزر الشخصية\n\n${question}\n\n⏰ عندك 60 ثانية.`,
+    {
+      parse_mode: "Markdown",
+      ...Markup.inlineKeyboard(
+        options.map((opt) => [Markup.button.callback(opt, `guess:${opt}:${chatId}`)])
+      ),
+    }
+  );
+
+  // تخزين الإجابة الصحيحة (ممكن تستخدم ماب أو DB حسب كودك)
+  ctx.session = ctx.session || {};
+  ctx.session[chatId] = correct;
+});
+
+bot.action(/guess:(.+):(.+)/, async (ctx) => {
+  const choice = ctx.match[1];
+  const chatId = ctx.match[2];
+
+  if (ctx.session && ctx.session[chatId]) {
+    if (choice === ctx.session[chatId]) {
+      await ctx.reply("🌷 إجابة صحيحة يا نجم 🎉");
+    } else {
+      await ctx.reply("❌ إجابة غلط، جرب تاني!");
+    }
+    delete ctx.session[chatId];
+  } else {
+    await ctx.reply("⏰ الوقت خلص أو مفيش لعبة شغالة.");
+  }
+});
+
+const colorOptions = [
+  { name: "أحمر", color: "#FF0000" },
+  { name: "أخضر", color: "#00FF00" },
+  { name: "أزرق", color: "#0000FF" },
+  { name: "أصفر", color: "#FFFF00" },
+  { name: "برتقالي", color: "#FFA500" },
+  { name: "بنفسجي", color: "#800080" },
+  { name: "رمادي", color: "#808080" },
+];
+
+const operations = [
+  { name: "تغيير الحجم", operation: (image) => image.resize(800, Jimp.AUTO) },
+  { name: "زيادة الحدة", operation: (image) =>
+      image.convolute([
+        [0, -1, 0],
+        [-1, 5, -1],
+        [0, -1, 0],
+      ])
+  },
+  { name: "تحسين السطوع", operation: (image) => image.brightness(0.1) },
+  { name: "تحسين التباين", operation: (image) => image.contrast(0.3) },
+  { name: "تحويل إلى أبيض وأسود", operation: (image) => image.grayscale() },
+  { name: "تنعيم الصورة", operation: (image) => image.blur(5) },
+  { name: "تدوير الصورة", operation: (image) => image.rotate(90) },
+  { name: "تغيير الألوان", operation: null },
+  { name: "تغيير الشفافية", operation: (image) => image.opacity(0.8) },
+  { name: "إضافة نص", operation: null },
+  { name: "قص الصورة", operation: null },
+  { name: "وضع إطار مشوش", operation: null },
+  { name: "تحويل إلى بورتريه", operation: null },
+  { name: "تحويل الصورة إلى HD", operation: (image) =>
+      image.resize(Jimp.AUTO, 1080)
+  },
+  { name: "ضبابية", operation: (image) => image.blur(10) },
+  { name: "كرتوني", operation: (image) =>
+      image.convolute([
+        [-1, -1, -1],
+        [-1, 9, -1],
+        [-1, -1, -1],
+      ])
+  },
+  { name: "ظل", operation: (image) => {
+      const shadow = image.clone().opacity(0.5).blur(5);
+      return image.composite(shadow, 10, 10);
+    }
+  },
+  { name: "زيتي", operation: (image) =>
+      image.color([{ apply: "mix", params: ["#8B4513", 100] }])
+  },
+  { name: "HDR", operation: (image) =>
+      image
+        .convolute([
+          [0, -1, 0],
+          [-1, 5, -1],
+          [0, -1, 0],
+        ])
+        .contrast(0.3)
+        .brightness(0.1)
+  },
+  { name: "فيلم", operation: (image) =>
+      image.color([{ apply: "mix", params: ["#000000", 50] }])
+  },
+  { name: "تشويش", operation: (image) => image.blur(3) },
+  { name: "تعتيم", operation: (image) => image.opacity(0.5) },
+];
+
+// الأمر /buti
+bot.command("buti", async (ctx) => {
+  try {
+    const text = ctx.message.text.split(" ").slice(1).join(" ");
+
+    // التأكد أن فيه صورة (إما بالرد أو في نفس الرسالة)
+    let fileId;
+    if (ctx.message.reply_to_message?.photo) {
+      fileId = ctx.message.reply_to_message.photo.slice(-1)[0].file_id;
+    } else if (ctx.message.photo) {
+      fileId = ctx.message.photo.slice(-1)[0].file_id;
+    } else {
+      return ctx.reply("🌷 يرجى إرسال صورة أو الرد على صورة مع رقم العملية.");
+    }
+
+    // لو مفيش رقم مدخل → عرض قائمة العمليات
+    if (!text) {
+      let operationsList = operations
+        .map((op, index) => `${index + 1}. ${op.name}`)
+        .join("\n");
+      return ctx.reply(`يرجى الإدخال بشكل صحيح:\n\nمثال: /buti 12\n\n${operationsList}`);
+    }
+
+    const inputArray = text.split(" ");
+    const operationNumber = parseInt(inputArray[0]) - 1;
+    const secondInput = inputArray.slice(1).join(" ");
+
+    if (
+      isNaN(operationNumber) ||
+      operationNumber < 0 ||
+      operationNumber >= operations.length
+    ) {
+      return ctx.reply("🌷 يرجى اختيار رقم صحيح من القائمة.");
+    }
+
+    await ctx.reply("♻️ جاري معالجة الصورة...");
+
+    // تحميل الصورة من تيليجرام
+    const fileLink = await ctx.telegram.getFileLink(fileId);
+    const imageBuffer = (
+      await axios.get(fileLink.href, { responseType: "arraybuffer" })
+    ).data;
+
+    let image = await Jimp.read(imageBuffer);
+
+    // عمليات خاصة
+    if (operations[operationNumber].name === "تحويل إلى بورتريه") {
+      const portraitWidth = image.bitmap.height * (9 / 16);
+      image.resize(portraitWidth, image.bitmap.height);
+      image.crop(0, 0, portraitWidth, image.bitmap.height);
+    }
+
+    if (operations[operationNumber].name === "تغيير الألوان") {
+      if (secondInput) {
+        const colorIndex = parseInt(secondInput) - 1;
+        if (colorIndex < 0 || colorIndex >= colorOptions.length) {
+          return ctx.reply("🌷 اختر رقم لون صحيح.");
+        }
+        const selectedColor = colorOptions[colorIndex].color;
+        image.color([{ apply: "mix", params: [selectedColor, 100] }]);
+      } else {
+        const colorList = colorOptions
+          .map((col, index) => `${index + 1}. ${col.name}`)
+          .join("\n");
+        return ctx.reply(`اختر اللون:\n\n${colorList}`);
+      }
+    }
+
+    if (operations[operationNumber].name === "إضافة نص") {
+      if (!secondInput) {
+        return ctx.reply("🌷 يرجى إدخال النص المطلوب.");
+      }
+      const font = await Jimp.loadFont(Jimp.FONT_SANS_64_WHITE);
+      const textWidth = Jimp.measureText(font, secondInput);
+      const textHeight = Jimp.measureTextHeight(font, secondInput);
+      image.print(
+        font,
+        image.bitmap.width / 2 - textWidth / 2,
+        image.bitmap.height - textHeight - 10,
+        secondInput
+      );
+    }
+
+    if (operations[operationNumber].name === "وضع إطار مشوش") {
+      const blurredImage = image.clone().blur(10);
+      const blurredWidth = image.bitmap.width * 2;
+      const blurredHeight = image.bitmap.height * 2;
+      blurredImage.resize(blurredWidth, blurredHeight);
+      blurredImage.composite(
+        image,
+        (blurredWidth - image.bitmap.width) / 2,
+        (blurredHeight - image.bitmap.height) / 2
+      );
+      image = blurredImage;
+    }
+
+    if (operations[operationNumber].name === "قص الصورة") {
+      const width = image.bitmap.width;
+      const height = image.bitmap.height;
+      const cropWidth = height / 2;
+      const cropHeight = height;
+      const x = width / 2 - cropWidth / 2;
+      const y = height / 2 - cropHeight / 2;
+      image.crop(x, y, cropWidth, cropHeight);
+    }
+
+    // باقي العمليات
+    const operationFunction = operations[operationNumber].operation;
+    if (operationFunction && typeof operationFunction === "function") {
+      await operationFunction(image);
+    }
+
+    const processedImageBuffer = await image.getBufferAsync(Jimp.MIME_JPEG);
+
+    await ctx.replyWithPhoto(
+      { source: processedImageBuffer },
+      { caption: `🌷 تم تطبيق "${operations[operationNumber].name}"` }
+    );
+  } catch (error) {
+    console.error(error);
+    ctx.reply(`🌷 خطأ أثناء المعالجة: ${error.message}`);
+  }
+});
+
+bot.command(["google", "بحث", "جوجل"], async (ctx) => {
+  const query = ctx.message.text.split(" ").slice(1).join(" ");
+  if (!query) {
+    return ctx.reply("❗🌷 اكتب الكلمة اللي عايز تبحث عنها بعد الأمر 🌷");
+  }
+
+  await ctx.reply("🔎 جاري البحث...");
+
+  try {
+    // البحث على DuckDuckGo
+    const url = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
+    const { data } = await axios.get(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
+
+    const $ = cheerio.load(data);
+    let results = [];
+
+    $("a.result-link").each((i, el) => {
+      const link = $(el).attr("href");
+      const title = $(el).text().trim();
+      const parent = $(el).parent();
+      const description = parent.find("br").next().text().trim();
+
+      if (title && link) {
+        results.push({
+          title,
+          description: description || "لا يوجد وصف تفصيلي.",
+          link,
+        });
+      }
+    });
+
+    if (!results.length) {
+      return ctx.reply("❌ مش لاقي أي نتيجة للبحث ده.");
+    }
+
+    // جلب صورة
+    async function fetchImage(q) {
+      try {
+        const imgUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(q)}`;
+        const { data } = await axios.get(imgUrl, {
+          headers: { "User-Agent": "Mozilla/5.0" },
+        });
+        const $ = cheerio.load(data);
+        const imageUrl = $("img").first().attr("src");
+        return imageUrl?.startsWith("http") ? imageUrl : null;
+      } catch {
+        return null;
+      }
+    }
+
+    // عرض أول 5 نتائج
+    for (let i = 0; i < Math.min(results.length, 5); i++) {
+      const res = results[i];
+      const img = (await fetchImage(res.title)) || "https://files.catbox.moe/ggxx14.jpg";
+
+      await ctx.replyWithPhoto(
+        { url: img },
+        {
+          caption: `❲ ˼نتيجة رقم ${i + 1}˹ ❳\n\n*${res.title}*\n${res.description}`,
+          parse_mode: "Markdown",
+          ...Markup.inlineKeyboard([
+            Markup.button.url("🔗 فتح الرابط", res.link),
+          ]),
+        }
+      );
+    }
+  } catch (e) {
+    console.error(e);
+    ctx.reply("❌ حصل خطأ أثناء جلب نتائج البحث.");
+  }
+});
+
+
+const istighfar = `
+استغفر الله العظيم
+من كل ذنب أذنبتـــــه 
+استغفر الله العظيم
+من كل فرض تركتـــه 
+استغفر الله العظيم
+من كل إنسان ظلمتــه 
+استغفر الله العظيم
+من كل صالح جفوتــه 
+دأستغفر الله العظيم
+من كل ظالم صاحبتــه 
+أستغفر الله العظيم
+من كل بر أجلتـــــــــه 
+أستغفر الله العظيم
+من كل ناصح أهنتـــه 
+أستغفر الله العظيم
+من كل محمود سئمتـــه 
+أستغفر الله العظيم
+من كل زور نطقـت بـه 
+أستغفر الله العظيم
+من كل حق اضعتــــه 
+أستغفر الله العظيم
+من كل باطل إتبعتـــه 
+أستغفر الله العظيم
+من كل وقت أهدرتــه 
+أستغفر الله العظيم
+من كل ضمير قتلتـــه 
+أستغفر الله العظيم
+من كل سر أفشيتــــه 
+أستغفر الله العظيم
+من كل أمين خدعتــه 
+أستغفر الله العظيم
+من كل وعد أخلفتـــه 
+أستغفر الله العظيم
+من كل عهد خنتـــــه 
+أستغفر الله العظيم
+من كل امرئ خذلتـه 
+أستغفر الله العظيم
+من كل صواب كتمتــه 
+أستغفر الله العظيم
+من كل خطأ تفوهـت بـه 
+أستغفر الله العظيم
+من كل عرض هتكتــه 
+دأستغفر الله العظيم
+من كل ستر فضحتــه 
+أستغفر الله العظيم
+من كل لغو سمعتــه 
+أستغفر الله العظيم
+من كل حرام نظرت إليـه 
+أستغفر الله العظيم
+من كل كلام لهوت بــه 
+أستغفر الله العظيم
+من كل إثـم فعلتـــه 
+أستغفر الله العظيم
+من كل نصح خالفتــه 
+أستغفر الله العظيم
+من كل علم نسيتــه 
+أستغفر الله العظيم
+من كل شك أطعتــه 
+أستغفر الله العظيم
+من كل ظن لازمتــه 
+أستغفر الله العظيم
+من كل ضلال عرفتــه 
+أستغفر الله العظيم
+من كل دين أهملتــه 
+أستغفر الله العظيم 
+من كل معصية عصيت بها ربي
+أستغفر الله العظيم
+من كل ما وعدتك به ثم عدت فيه من نفسي ولم أوف به 
+أستغفر الله العظيم
+من كل عمل أردت به وجهك فخالطني به غيرك 
+أستغفر الله العظيم
+من كل نعمة أنعمت علي بها فاستعنت بها على معصيتك 
+أستغفر الله العظيم
+من كل ذنب أذنبته في ضياء النهار أو سواد الليل في ملأ أو خلا أو سر أو علانية 
+أستغفر الله العظيم
+من كل مال إكتسبته بغير الحق 
+أستغفر الله العظيم
+من كل علم سئلت عنه فكتمته 
+أستغفر الله العظيم
+من كل قول صالح لم أعمل به وخالفتــه 
+أستغفر الله العظيم
+من كل فرض خالفته ومن كل بدعة إتبعتهــا 
+أستغفر الله الذي لا إله إلا هو الحي القيوم وأتوب إليه 
+استغفرك ربي لتقصيريّ وقلة صبري 
+طاستغفرك ربي حتى تغفر ليّ وترحم ضعفيّ
+استغفرك ربي حتى ترضى عني وتدخلني جنتك إنك أنت التوّاب الغفور
+`;
+
+// 🟢 أمر الاستغفار
+bot.command(["استغفار", "استغفارات"], async (ctx) => {
+  await ctx.reply(istighfar, { parse_mode: "Markdown" });
+});
+
+
+
+bot.command("to_text", async (ctx) => {
+  try {
+    if (!ctx.message.reply_to_message || !ctx.message.reply_to_message.voice) {
+      return ctx.reply("📍 لازم ترد على مقطع صوتي!");
+    }
+
+    await ctx.reply("🌷 جاري التحويل...");
+
+    // تحميل الصوت من تيليجرام
+    const fileId = ctx.message.reply_to_message.voice.file_id;
+    const fileLink = await ctx.telegram.getFileLink(fileId);
+    const audioBuffer = (await axios.get(fileLink.href, { responseType: "arraybuffer" })).data;
+
+    // إنشاء مجلد مؤقت
+    await fs.mkdir("./tmp", { recursive: true });
+    const inputPath = path.join("./tmp", `input_${Date.now()}.ogg`);
+    const outputPath = path.join("./tmp", `output_${Date.now()}.mp3`);
+
+    await fs.writeFile(inputPath, audioBuffer);
+
+    // تحويل ogg → mp3
+    await new Promise((resolve, reject) => {
+      ffmpeg(inputPath)
+        .setFfmpegPath(ffmpegStatic)
+        .noVideo()
+        .audioCodec("libmp3lame")
+        .format("mp3")
+        .output(outputPath)
+        .on("end", () => resolve())
+        .on("error", (err) => reject(err))
+        .run();
+    });
+
+    const mp3Buffer = await fs.readFile(outputPath);
+
+    // رفع الملف على catbox
+    const form = new FormData();
+    form.append("reqtype", "fileupload");
+    form.append("fileToUpload", mp3Buffer, "audio.mp3");
+
+    const catboxRes = await axios.post("https://catbox.moe/user/api.php", form, {
+      headers: form.getHeaders(),
+    });
+
+    const catboxUrl = catboxRes.data;
+    if (!catboxUrl.includes("catbox.moe")) {
+      throw new Error("فشل رفع الملف على catbox");
+    }
+
+    // استدعاء API لتحويل الصوت لنص
+    const apiUrl = `https://api.ubed.my.id/ai/audio-analyze-ui?q=حول%20هذا%20الصوت%20الى%20كلمات&url=${encodeURIComponent(catboxUrl)}&apikey=free1`;
+    const { data } = await axios.get(apiUrl);
+
+    if (data.status !== "Success" || !data.result) {
+      throw new Error("فشل استخراج النص من الصوت");
+    }
+
+    // إرسال النص في الشات
+    await ctx.reply(`🧞 النص المستخرج:\n\n${data.result}`);
+
+    // تنظيف الملفات
+    await fs.unlink(inputPath).catch(() => {});
+    await fs.unlink(outputPath).catch(() => {});
+  } catch (err) {
+    console.error(err);
+    await ctx.reply(`❌ حصل خطأ: ${err.message || err}`);
+  }
+});
+
+
+
+bot.command(["out", "leavegc", "اخرج", "برا"], async (ctx) => {
+  const chatId = ctx.chat.id;
+  const userId = String(ctx.from.id);
+
+  // السماح فقط للمطور أو الديفيلوبر
+  if (!OWNER_ID.includes(userId) && !DEVELOPERS.includes(userId)) {
+    return ctx.reply("⚠️ هذا الأمر مخصص للمطور فقط!");
+  }
+
+  await ctx.reply("『 حاضر يا مطوري انا خارج باي 🥺💗 』");
+
+  try {
+    await ctx.telegram.leaveChat(chatId);
+  } catch (err) {
+    console.error("❌ خطأ في مغادرة الجروب:", err);
+    await ctx.reply("⚠️ حصل خطأ ومقدرتش أخرج من الجروب");
+  }
+});
+
+// 🟢 تحويل الوقت إلى نظام 12 ساعة*
+
+
+// 🟢 تحويل من 24 ساعة → 12 ساعة
+function format12HourTime(time24) {
+  const [hours, minutes] = time24.split(":");
+  let period = "AM";
+  let hours12 = parseInt(hours, 10);
+
+  if (hours12 >= 12) {
+    period = "PM";
+    if (hours12 > 12) hours12 -= 12;
+  }
+
+  return `${hours12}:${minutes} ${period}`;
+}
+
+// 🟢 المدن + الدولة
+const cityCountryMap = {
+  "c": "EG",
+  "الرياض": "SA",
+  "دبي": "AE",
+  "بيروت": "LB",
+  "تونس": "TN",
+  "بغداد": "IQ",
+  "عمان": "JO",
+  "مسقط": "OM",
+  "الدوحة": "QA",
+  "الكويت": "KW",
+  "مكة": "SA",
+  "المدينة": "SA",
+};
+
+// 🟢 صور خلفية
+const images = [
+  "https://raw.githubusercontent.com/Mohnd32145/Media/master/menus/a6.jpg",
+  "https://raw.githubusercontent.com/Mohnd32145/Media/master/menus/a4.jpg",
+  "https://raw.githubusercontent.com/Mohnd32145/Media/master/menus/a5.jpg",
+];
+
+// 🟢 الكيبورد
+const cityKeyboard = [
+  [
+    { text: "🕌 القاهرة", callback_data: "salah_c" },
+    { text: "🕌 الرياض", callback_data: "salah_الرياض" },
+  ],
+  [
+    { text: "🕌 دبي", callback_data: "salah_دبي" },
+    { text: "🕌 بيروت", callback_data: "salah_بيروت" },
+  ],
+  [
+    { text: "🕌 تونس", callback_data: "salah_تونس" },
+    { text: "🕌 بغداد", callback_data: "salah_بغداد" },
+  ],
+  [
+    { text: "🕌 عمان", callback_data: "salah_عمان" },
+    { text: "🕌 مسقط", callback_data: "salah_مسقط" },
+  ],
+  [
+    { text: "🕌 الدوحة", callback_data: "salah_الدوحة" },
+    { text: "🕌 الكويت", callback_data: "salah_الكويت" },
+  ],
+  [
+    { text: "🕋 مكة", callback_data: "salah_مكة" },
+    { text: "🕌 المدينة", callback_data: "salah_المدينة" },
+  ],
+];
+
+// 🟢 أمر الصلاة
+function setupPrayer(bot) {
+  bot.command(["salah", "azan"], async (ctx) => {
+    const randomImage = images[Math.floor(Math.random() * images.length)];
+
+    return ctx.replyWithPhoto(
+      { url: randomImage },
+      {
+        caption: `👋 مرحبًا ${ctx.from.first_name}\n\n📌 اختر مدينتك من القائمة:`,
+        reply_markup: {
+          inline_keyboard: cityKeyboard,
+        },
+      }
+    );
+  });
+
+  // 🟢 التعامل مع اختيار المدينة
+  bot.on("callback_query", async (ctx) => {
+    const data = ctx.callbackQuery.data;
+    if (!data.startsWith("salah_")) return; // تجاهل غير أزرار الصلاة
+
+    const city = data.replace("salah_", "");
+    const country = cityCountryMap[city] || "EG";
+    const randomImage = images[Math.floor(Math.random() * images.length)];
+
+    try {
+      const prayerResponse = await axios.get(
+        `http://api.aladhan.com/v1/timingsByCity?city=${encodeURIComponent(
+          city
+        )}&country=${country}`
+      );
+      const prayerData = prayerResponse.data.data.timings;
+
+      const fajr = format12HourTime(prayerData.Fajr);
+      const sunrise = format12HourTime(prayerData.Sunrise);
+      const dhuhr = format12HourTime(prayerData.Dhuhr);
+      const asr = format12HourTime(prayerData.Asr);
+      const maghrib = format12HourTime(prayerData.Maghrib);
+      const isha = format12HourTime(prayerData.Isha);
+
+      const prayerMessage = `🕌 مواقيت الصلاة في ${city} اليوم:\n\n- الفجر: ${fajr}\n- الشروق: ${sunrise}\n- الظهر: ${dhuhr}\n- العصر: ${asr}\n- المغرب: ${maghrib}\n- العشاء: ${isha}`;
+
+      await ctx.replyWithPhoto(
+        { url: randomImage },
+        { caption: prayerMessage, parse_mode: "Markdown" }
+      );
+    } catch (error) {
+      console.error("❌ خطأ أثناء جلب مواقيت الصلاة:", error);
+      ctx.reply("❌ عذرًا، لم أتمكن من العثور على مواقيت الصلاة لهذه المدينة.");
+    }
+
+    await ctx.answerCbQuery();
+  });
+}
+
+// 🟢 شغّل الفانكشن
+setupPrayer(bot);
+
+// 🟢 شغل ا
+
+// 🟢 تشغيل البوت
+
+
+
+
+// صور الميمز
+const dir = [
+"https://telegra.ph/file/bdbdda3294d2f65bd5c23.jpg",
+"https://telegra.ph/file/79472b6a1ae9208339e8d.jpg",
+"https://telegra.ph/file/04f1cbac5342f631306b1.jpg",
+"https://telegra.ph/file/a1cae6b105bf11c5cd35f.jpg",
+"https://telegra.ph/file/855eb59de3efa1c343852.jpg",
+"https://telegra.ph/file/b778d3e166d015744f803.jpg",
+"https://telegra.ph/file/522cba3b013deb912b670.jpg",
+"https://telegra.ph/file/bbb2a3c02e5c0e3b44b46.jpg",
+"https://telegra.ph/file/fec2c6bb18eb55b706ebf.jpg",
+"https://telegra.ph/file/10e1e9742c20f2b472b85.jpg",
+"https://telegra.ph/file/d2632bd14d4f58ad4d2a5.jpg",
+"https://telegra.ph/file/1c8ffe52df95f982a4479.jpg",
+"https://telegra.ph/file/1d31d899d32fcde8a1917.jpg",
+"https://telegra.ph/file/eeda4919ca224672e531c.jpg",
+"https://telegra.ph/file/a92695904d1afbeacefe1.jpg",
+"https://telegra.ph/file/77abbc4d8857b07ec2975.jpg",
+"https://telegra.ph/file/d14581c30c22882ed5bdd.jpg",
+"https://telegra.ph/file/bd3d0cdb1001a95ecb23a.jpg",
+"https://telegra.ph/file/691b4f81349158ea567b3.jpg",
+"https://telegra.ph/file/d51e27f968ddfe9355b37.jpg",
+"https://telegra.ph/file/8304d127b062df9a30211.jpg",
+"https://telegra.ph/file/c0b210e135bba30d0d98c.jpg",
+"https://telegra.ph/file/262246248cf2fc2ec8c15.jpg",
+"https://telegra.ph/file/b02afc8cc380e77d9bd46.jpg",
+"https://telegra.ph/file/8e20dcd2f3eafbfa8959f.jpg",
+"https://telegra.ph/file/8e26a3c5a3ce6ce5494b9.jpg",
+"https://telegra.ph/file/caa5ab0534291faebc2ac.jpg",
+"https://telegra.ph/file/33ea0c1803e1876b1a446.jpg",
+"https://telegra.ph/file/367b322fbbfc9bd59ec67.jpg",
+"https://telegra.ph/file/d9127ea1389abaacb5ffa.jpg",
+"https://telegra.ph/file/260f66ab9627e34d25135.jpg",
+"https://telegra.ph/file/a646c2e04149e51a0b1f7.jpg",
+"https://telegra.ph/file/6f0eb3f5c166e3424641a.jpg",
+"https://telegra.ph/file/bc4d7e99023bd9081eed8.jpg",
+"https://telegra.ph/file/d96eb83dbeb9acb2cc724.jpg",
+"https://telegra.ph/file/63f9e43cecddb02030639.jpg",
+"https://telegra.ph/file/50eb92b1f92e8fd3eddfe.jpg",
+"https://telegra.ph/file/1d635087d4323a5cc13e2.jpg",
+"https://telegra.ph/file/17e1eeb1cac42a2c4c980.jpg",
+"https://telegra.ph/file/6e28ba52901ebe9329466.jpg",
+"https://telegra.ph/file/e8cab17d03a4a70fb6a7d.jpg",
+"https://telegra.ph/file/464f69ff5a2e5b360be90.jpg",
+"https://telegra.ph/file/f2b4a547cde3104d465d6.jpg",
+"https://telegra.ph/file/5104c56e322f21061cb88.jpg",
+"https://telegra.ph/file/226225ea7df934f81c06a.jpg",
+"https://telegra.ph/file/4554e95993f0a68e3c1e4.jpg",  
+"https://telegra.ph/file/f92b992ec5778364a53e2.jpg",
+"https://telegra.ph/file/7cb8c62a834c725e4f9d8.jpg",
+"https://telegra.ph/file/52685cf01fc3b883dcf21.jpg",
+"https://telegra.ph/file/985846b2beffc26e1686a.jpg",
+"https://telegra.ph/file/40951997ad53141cd99cb.jpg",
+"https://telegra.ph/file/4c027d0666c5513634a83.jpg",
+"https://telegra.ph/file/25a14cd4fff811de1475f.jpg",
+"https://telegra.ph/file/645de7e8ce68ade591bb2.jpg",
+"https://telegra.ph/file/4b540ca77c8b2a1d1ec57.jpg",
+"https://telegra.ph/file/53a5a6a5b2d71c6d3c163.jpg",
+"https://telegra.ph/file/48571aa7be63a3de59ff2.jpg",
+"https://telegra.ph/file/553bca98fe9dec4270ad7.jpg",
+"https://telegra.ph/file/87a7bda3cfde01d2348ed.jpg",
+"https://telegra.ph/file/7c24e7540548c2d74d424.jpg",
+"https://telegra.ph/file/60eeedd13a6bb5be507b5.jpg",
+"https://telegra.ph/file/328d7865de1bd1971a557.jpg",
+"https://telegra.ph/file/e4b0461725fc22520eda9.jpg",
+"https://telegra.ph/file/9bb6046502993d6ce6518.jpg",
+"https://telegra.ph/file/8890c73047805cf78c00a.jpg",
+"https://telegra.ph/file/dc81295351494c2a1c472.jpg",
+"https://telegra.ph/file/4232a1c385ff9da68aef6.jpg",
+"https://telegra.ph/file/ea550661d8ab4b84c6296.jpg",
+"https://telegra.ph/file/8b2190dc849e24972152c.jpg",
+"https://telegra.ph/file/f207b57a1f51412a203e7.jpg",
+"https://telegra.ph/file/cf2fccd900ff2d0d131a1.jpg",
+"https://telegra.ph/file/940e82466ed78e975a745.jpg",
+"https://telegra.ph/file/b0c749d5e802332dcc11f.jpg",
+"https://telegra.ph/file/769d89ef7f7336bd05a80.jpg",
+"https://telegra.ph/file/f9138226511b3a30e958b.jpg",
+"https://telegra.ph/file/8281fdf957ebca93aec0f.jpg",
+"https://telegra.ph/file/3c6dd91466c9ed89d2bf7.jpg",
+"https://telegra.ph/file/8bcad0c566c5f51ffe5bb.jpg",
+"https://telegra.ph/file/4ac11fe77b659d5168b1e.jpg",
+"https://telegra.ph/file/c3fcd3e486c6a3bee6f4f.jpg",
+"https://telegra.ph/file/31de70933034c724b74f1.jpg",
+"https://telegra.ph/file/2d249ca2b62c18af6baa3.jpg",
+"https://telegra.ph/file/ef8ebed7d971ce6de5ee9.jpg",
+"https://telegra.ph/file/777fb5cb0f6be330f9b8a.jpg",
+"https://telegra.ph/file/20aef78978a92b8b0444b.jpg",
+"https://telegra.ph/file/20bc0e05daf3272ea89b9.jpg",
+"https://telegra.ph/file/a915d3752bac387b81adf.jpg",
+"https://telegra.ph/file/c20048814324dd1a1bb77.jpg",
+"https://telegra.ph/file/3b945a8a14851ece29de7.jpg",
+"https://telegra.ph/file/abf7e03745ca2d298a9c1.jpg",
+"https://telegra.ph/file/13e4a77349596c5ab8a79.jpg",
+"https://telegra.ph/file/32bc65b3c0baa1eb6c284.jpg",
+"https://telegra.ph/file/1c231e0675b7f6edd579a.jpg",
+"https://telegra.ph/file/c564473a41ab8405dc3b9.jpg",
+"https://telegra.ph/file/aa8bd2a777b01d0b24f4d.jpg",
+"https://telegra.ph/file/a915d3752bac387b81adf.jpg",
+"https://telegra.ph/file/59c075e64bdd0e17b659f.jpg",
+"https://telegra.ph/file/f7c59f1787705d36043ca.jpg",
+"https://telegra.ph/file/c20048814324dd1a1bb77.jpg",
+"https://telegra.ph/file/d9153d75fc60d64026525.jpg",
+"https://telegra.ph/file/3b945a8a14851ece29de7.jpg",
+"https://telegra.ph/file/1c678a25b8b6482bc3cba.jpg",
+"https://telegra.ph/file/cbc63680e04511756d57a.jpg",
+"https://telegra.ph/file/f7c59f1787705d36043ca.jpg",
+"https://telegra.ph/file/58081f8a94dbd1d1caf40.jpg",
+"https://telegra.ph/file/e1539e82d5bc96bc9f15e.jpg",
+"https://telegra.ph/file/36efa93ee22207c36ad2d.jpg",
+"https://telegra.ph/file/6df3e879dd9c2e908859f.jpg",
+"https://telegra.ph/file/cbc63680e04511756d57a.jpg",
+"https://telegra.ph/file/65dc15eb996d69742fcb9.jpg",
+"https://telegra.ph/file/986928ae97ba48c5f54be.jpg",
+"https://telegra.ph/file/92379479bbe99f312f13f.jpg",
+"https://telegra.ph/file/c46fda1ffbbaa3c406a29.jpg",
+"https://telegra.ph/file/0d32e11e4a0dae13dac3d.jpg",
+"https://telegra.ph/file/13a65df594224f0c46561.jpg",
+"https://telegra.ph/file/17d2fd7d6e0fbfe0d74dd.jpg",
+"https://telegra.ph/file/98acc5caa337ba06407b5.jpg",
+"https://telegra.ph/file/102561f89b0967f27ce63.jpg",
+"https://telegra.ph/file/e4f06eb175994ef6ebd41.jpg",
+"https://telegra.ph/file/bf3a36c8f30e56dcbbfa5.jpg",
+"https://telegra.ph/file/3a5b3ea59347b2f8fb805.jpg",
+"https://telegra.ph/file/60262d7d56b4352993e88.jpg",
+"https://telegra.ph/file/efbcd6bd3cd12b210d77c.jpg",
+"https://telegra.ph/file/2d692d315587805dde1a9.jpg",
+"https://telegra.ph/file/e51a3c070b031ccefb801.jpg",
+"https://telegra.ph/file/a0a8e70592a5b2ccd2987.jpg",
+"https://telegra.ph/file/5e1fc88c8803a0fc31523.jpg",
+"https://telegra.ph/file/1f54bdd48b568aa05d593.jpg",
+"https://telegra.ph/file/62ac12702441491e0c73b.jpg",
+"https://telegra.ph/file/fa537428bb58b297e3ed3.jpg",
+"https://telegra.ph/file/3155c1dc08fa26970d858.jpg",
+"https://telegra.ph/file/e926a13e06728028d860d.jpg",
+"https://telegra.ph/file/71e8a40317d9dd6dce50f.jpg",
+"https://telegra.ph/file/1c9f11a44ac8ed88e073e.jpg",
+"https://telegra.ph/file/271155de61db260ef09ba.jpg",
+"https://telegra.ph/file/d898b26a10495e8c6792b.jpg",
+"https://telegra.ph/file/f6b71e125dd4971253c39.jpg",
+"https://telegra.ph/file/73e9f8a1692c470e63d04.jpg",
+"https://telegra.ph/file/6c72d75cbb596fd757aba.jpg",
+"https://telegra.ph/file/ede1c654d4c218c0b263b.jpg",
+"https://telegra.ph/file/078671b7aee6dd8c4ae09.jpg",
+"https://telegra.ph/file/04f6a1c2c271e3d0d9b08.jpg",
+"https://telegra.ph/file/e1f3bc35cb2b201ec12e4.jpg",
+"https://telegra.ph/file/0d6fb4189e171d90505f8.jpg",
+"https://telegra.ph/file/efa364c3e60769ba75743.jpg",
+"https://telegra.ph/file/65bf5dbc42b5c43fc5d2f.jpg",
+"https://telegra.ph/file/03fd2e33eef17aa189e5a.jpg",
+"https://telegra.ph/file/03fd2e33eef17aa189e5a.jpg",
+"https://telegra.ph/file/855054f8f233540b8bdc7.jpg",
+"https://telegra.ph/file/9c5e03843b07195c0e6d2.jpg",
+"https://telegra.ph/file/5040ad2d3824e605df811.jpg",
+  "https://telegra.ph/file/37654136d433cda49ddb5.jpg",
+  "https://telegra.ph/file/4e5fae97ae4b8c2ada150.jpg",,
+  "https://telegra.ph/file/967127100f10b8ecc6742.jpg",
+  "https://telegra.ph/file/a0823ec4d76263f622bdb.jpg",
+  "https://telegra.ph/file/0c52413904c09dfd2c811.jpg",
+  "https://telegra.ph/file/07523b69ef4b36beb72d8.jpg",
+  "https://telegra.ph/file/59afbca42e21f65f8cc15.jpg",
+  "https://telegra.ph/file/2647f82b1a7e234a7809b.jpg",
+  "https://telegra.ph/file/fd083fff3325929f0cdfd.jpg",
+  "https://telegra.ph/file/be68121fa84422176bb28.jpg",
+  "https://telegra.ph/file/969f822a24b4cd282cf76.jpg",
+  "https://telegra.ph/file/aeecfb155e3cf7f0f5947.jpg",
+  "https://telegra.ph/file/c678efc3ef7a1bc493119.jpg",
+  "https://telegra.ph/file/fe2b8457c71bff359507e.jpg",
+  "https://telegra.ph/file/e4a66bf21e84f4621414b.jpg",
+  "https://telegra.ph/file/3bc11661292338b406b3e.jpg",
+  "https://telegra.ph/file/c5b202989866b8846602a.jpg",
+  "https://telegra.ph/file/503e51ef861e759700453.jpg",
+  "https://telegra.ph/file/31c8c3e15a9746027c350.jpg",
+  "https://telegra.ph/file/fbcffd3f0382ef3c1e7fd.jpg",
+  "https://telegra.ph/file/6c14f8480ab9e8ed83612.jpg",
+  "https://telegra.ph/file/910adda99f8a81b5a65e7.jpg",
+  "https://telegra.ph/file/ab8dea1ffd87d9c179f14.jpg",
+  "https://telegra.ph/file/220aaf3e0ead25c0ce553.jpg",
+  "https://telegra.ph/file/8a8cc247936eec334cc42.jpg",
+  "https://telegra.ph/file/6f46305f0816b1412298c.jpg",
+  "https://telegra.ph/file/6fcb3f6c4c239c8d32859.jpg",
+  "https://telegra.ph/file/6f46305f0816b1412298c.jpg",
+  "https://telegra.ph/file/845f75cbae119f3115ddb.jpg",
+  "https://telegra.ph/file/70bdf0c76dd30d80fa73f.jpg",
+  "https://telegra.ph/file/7e6e1bcab1f6617dcf982.jpg",
+  "https://telegra.ph/file/6c550192023fa2a255619.jpg",
+  "https://telegra.ph/file/048847a5b87dd894abbca.jpg",
+  "https://telegra.ph/file/048847a5b87dd894abbca.jpg",
+  "https://telegra.ph/file/941bb9cff3d6634507a9a.jpg",
+  "https://telegra.ph/file/dd85e81b3966b592b8b9f.jpg",
+  "https://telegra.ph/file/e3ecf74b8eae3b6369cdc.jpg",
+  "https://telegra.ph/file/23cae8ea8f0d46ff4b54c.jpg",
+  "https://telegra.ph/file/e6e87fb7b23930a18d50d.jpg",
+  "https://telegra.ph/file/bcbbc1465bf83e3459741.jpg",
+  "https://telegra.ph/file/c4b972ad9cc53478f5aed.jpg",
+  "https://telegra.ph/file/d766ef3af433954f1e119.jpg",
+  "https://telegra.ph/file/bd6eef071257e8f72729f.jpg",
+  "https://telegra.ph/file/4c81f511853ef00d4f678.jpg",
+  "https://telegra.ph/file/114f0676e58f727f37420.jpg",
+  "https://telegra.ph/file/95f8c93dfe10faf881386.jpg",
+  "https://telegra.ph/file/68e6576943e747c17b2b8.jpg",
+  "https://telegra.ph/file/c546ada04886aa58bfa58.jpg",
+  "https://telegra.ph/file/523f47a50a6b2e9c9d01d.jpg",
+  "https://telegra.ph/file/b8980fdb0ded2e35cf1f8.jpg",
+  "https://telegra.ph/file/b91d6994d92fb14ffb9d9.jpg",
+  "https://telegra.ph/file/c24b4695d44f40689da53.jpg",
+  "https://telegra.ph/file/ad97b118591b7800ab9d8.jpg",
+  "https://telegra.ph/file/eb044c75d915030c690f7.jpg",
+  "https://telegra.ph/file/85a3272990ae3d20e4582.jpg",
+  "https://telegra.ph/file/ee15d32656ea7ea87b4bc.jpg",
+  "https://telegra.ph/file/c30181ddef746cc853314.jpg",
+  "https://telegra.ph/file/2ba48ee78f824d27cac27.jpg",
+  "https://telegra.ph/file/2ba48ee78f824d27cac27.jpg",
+  "https://telegra.ph/file/56f7306292f4ee781f09f.jpg",
+  "https://telegra.ph/file/56f7306292f4ee781f09f.jpg",
+  "https://telegra.ph/file/50fa0a6787f9b106df01c.jpg",
+  "https://telegra.ph/file/32d4406ee5e1cc0f7163a.jpg",
+  "https://telegra.ph/file/ded3d5f549f7b29fb5e0f.jpg",
+  "https://telegra.ph/file/b9bf5ad89caa694ce7c73.jpg",
+  "https://telegra.ph/file/52dd626ac44ac15e47fc8.jpg",
+  "https://telegra.ph/file/dd60db0990cd505a4e50b.jpg",
+  "https://telegra.ph/file/03d21c2ce1b06c4c23bf7.jpg",
+  "https://telegra.ph/file/03d21c2ce1b06c4c23bf7.jpg",
+  "https://telegra.ph/file/be83fa88e290369c97882.jpg",
+  "https://telegra.ph/file/740ad1859c315fc322191.jpg",
+  "https://telegra.ph/file/184bf10e5c1897c6a7adf.jpg",
+  "https://telegra.ph/file/ec213ff76cb27ff975fea.jpg",
+  "https://telegra.ph/file/557dd9b675438f6948187.jpg",
+  "https://telegra.ph/file/c05adb1f1c4b6200f9f4b.jpg",
+  "https://telegra.ph/file/748aca5e8ce87270a66c3.jpg",
+  "https://telegra.ph/file/1f7212c1f0bfcb4c13104.jpg",
+  "https://telegra.ph/file/ca5941dee6d67cbc97ce0.jpg",
+  "https://telegra.ph/file/ecf7eef2f09000ef8a97f.jpg",
+  "https://telegra.ph/file/52830c9088c96b2f2d9dc.jpg",
+  "https://telegra.ph/file/48e1e809ee4a9801a31c0.jpg",
+  "https://telegra.ph/file/8b7bc75df501d1aac9999.jpg",
+  "https://telegra.ph/file/bfbd6dffb9cdd75c4565f.jpg",
+  "https://telegra.ph/file/3ea1374109d9ea837c712.jpg",
+  "https://telegra.ph/file/b83bb4de0cb6975393801.jpg",
+  "https://telegra.ph/file/d4f04d317996ddbbcfa49.jpg",
+  "https://telegra.ph/file/da7a7a09047bb3f77dd1e.jpg",
+  "https://telegra.ph/file/45dfd7ef7f7780a3c1f83.jpg",
+  "https://telegra.ph/file/ee405de996dd3e52e6feb.jpg",
+  "https://telegra.ph/file/6f7860201f620215a1bd3.jpg",
+  "https://telegra.ph/file/1fc7a06845f91cc3dbf17.jpg",
+  "https://telegra.ph/file/6f2d56a83c667198645f3.jpg",
+  "https://telegra.ph/file/f9435fd259a10eb3d4a2f.jpg",
+  "https://telegra.ph/file/6f8cb1247e92ebaec48d4.jpg",
+  "https://telegra.ph/file/5241d93b0d25644ed4a57.jpg",
+  "https://telegra.ph/file/5241d93b0d25644ed4a57.jpg",
+  "https://telegra.ph/file/b4076988422ce25d58dae.jpg",
+  "https://telegra.ph/file/26b43b07faac626cf5e04.jpg",
+  "https://telegra.ph/file/69e0a1a2f58757f132abd.jpg",
+  "https://telegra.ph/file/9161c4becc39958ddec42.jpg",
+  "https://telegra.ph/file/c529e024dd3b704a43fb6.jpg",
+  "https://telegra.ph/file/9567e4783f0fa58c17fd5.jpg",
+  "https://telegra.ph/file/0437e79f988ef2e8ce093.jpg",
+  "https://telegra.ph/file/ffdf22318450354dc8d3c.jpg",
+  "https://telegra.ph/file/c6b1ebb8aa4e23ee9150f.jpg",
+"htps://telegra.ph/file/25a14cd4fff811de1475f.jpg",
+"https://telegra.ph/file/645de7e8ce68ade591bb2.jpg",
+"https://telegra.ph/file/4b540ca77c8b2a1d1ec57.jpg",
+"https://telegra.ph/file/53a5a6a5b2d71c6d3c163.jpg",
+"https://telegra.ph/file/48571aa7be63a3de59ff2.jpg",
+"https://telegra.ph/file/553bca98fe9dec4270ad7.jpg",
+"https://telegra.ph/file/87a7bda3cfde01d2348ed.jpg",
+"https://telegra.ph/file/7c24e7540548c2d74d424.jpg",
+"https://telegra.ph/file/60eeedd13a6bb5be507b5.jpg",
+"https://telegra.ph/file/328d7865de1bd1971a557.jpg",
+"https://telegra.ph/file/e4b0461725fc22520eda9.jpg",
+"https://telegra.ph/file/9bb6046502993d6ce6518.jpg",
+"https://telegra.ph/file/8890c73047805cf78c00a.jpg",
+"https://telegra.ph/file/dc81295351494c2a1c472.jpg",
+"https://telegra.ph/file/4232a1c385ff9da68aef6.jpg",
+"https://telegra.ph/file/ea550661d8ab4b84c6296.jpg",
+"https://telegra.ph/file/8b2190dc849e24972152c.jpg",
+"https://telegra.ph/file/f207b57a1f51412a203e7.jpg",
+"https://telegra.ph/file/cf2fccd900ff2d0d131a1.jpg",
+"https://telegra.ph/file/940e82466ed78e975a745.jpg",
+"https://telegra.ph/file/b0c749d5e802332dcc11f.jpg",
+"https://telegra.ph/file/769d89ef7f7336bd05a80.jpg",
+"https://telegra.ph/file/f9138226511b3a30e958b.jpg",
+"https://telegra.ph/file/8281fdf957ebca93aec0f.jpg",
+"https://telegra.ph/file/3c6dd91466c9ed89d2bf7.jpg",
+"https://telegra.ph/file/8bcad0c566c5f51ffe5bb.jpg",
+"https://telegra.ph/file/4ac11fe77b659d5168b1e.jpg",
+"https://telegra.ph/file/c3fcd3e486c6a3bee6f4f.jpg",
+"https://telegra.ph/file/31de70933034c724b74f1.jpg",
+"https://telegra.ph/file/2d249ca2b62c18af6baa3.jpg",
+"https://telegra.ph/file/ef8ebed7d971ce6de5ee9.jpg",
+"https://telegra.ph/file/777fb5cb0f6be330f9b8a.jpg",
+"https://telegra.ph/file/20aef78978a92b8b0444b.jpg",
+"https://telegra.ph/file/20bc0e05daf3272ea89b9.jpg",
+"https://telegra.ph/file/a915d3752bac387b81adf.jpg",
+"https://telegra.ph/file/c20048814324dd1a1bb77.jpg",
+"https://telegra.ph/file/3b945a8a14851ece29de7.jpg",
+"https://telegra.ph/file/abf7e03745ca2d298a9c1.jpg",
+"https://telegra.ph/file/13e4a77349596c5ab8a79.jpg",
+"https://telegra.ph/file/32bc65b3c0baa1eb6c284.jpg",
+"https://telegra.ph/file/1c231e0675b7f6edd579a.jpg",
+"https://telegra.ph/file/c564473a41ab8405dc3b9.jpg",
+"https://telegra.ph/file/aa8bd2a777b01d0b24f4d.jpg",
+"https://telegra.ph/file/a915d3752bac387b81adf.jpg",
+"https://telegra.ph/file/59c075e64bdd0e17b659f.jpg",
+"https://telegra.ph/file/f7c59f1787705d36043ca.jpg",
+"https://telegra.ph/file/c20048814324dd1a1bb77.jpg",
+"https://telegra.ph/file/d9153d75fc60d64026525.jpg",
+"https://telegra.ph/file/3b945a8a14851ece29de7.jpg",
+"https://telegra.ph/file/1c678a25b8b6482bc3cba.jpg",
+"https://telegra.ph/file/cbc63680e04511756d57a.jpg",
+"https://telegra.ph/file/f7c59f1787705d36043ca.jpg",
+"https://telegra.ph/file/58081f8a94dbd1d1caf40.jpg",
+"https://telegra.ph/file/e1539e82d5bc96bc9f15e.jpg",
+"https://telegra.ph/file/36efa93ee22207c36ad2d.jpg",
+"https://telegra.ph/file/6df3e879dd9c2e908859f.jpg",
+"https://telegra.ph/file/cbc63680e04511756d57a.jpg",
+"https://telegra.ph/file/65dc15eb996d69742fcb9.jpg",
+"https://telegra.ph/file/986928ae97ba48c5f54be.jpg",
+"https://telegra.ph/file/92379479bbe99f312f13f.jpg",
+"https://telegra.ph/file/c46fda1ffbbaa3c406a29.jpg",
+"https://telegra.ph/file/0d32e11e4a0dae13dac3d.jpg",
+"https://telegra.ph/file/13a65df594224f0c46561.jpg",
+"https://telegra.ph/file/17d2fd7d6e0fbfe0d74dd.jpg",
+"https://telegra.ph/file/98acc5caa337ba06407b5.jpg",
+"https://telegra.ph/file/102561f89b0967f27ce63.jpg",
+"https://telegra.ph/file/e4f06eb175994ef6ebd41.jpg",
+"https://telegra.ph/file/bf3a36c8f30e56dcbbfa5.jpg",
+"https://telegra.ph/file/3a5b3ea59347b2f8fb805.jpg",
+"https://telegra.ph/file/60262d7d56b4352993e88.jpg",
+];
+
+bot.command(["mem", "الميمز"], async (ctx) => {
+  try {
+    const randomImg = dir[Math.floor(Math.random() * dir.length)];
+
+    await ctx.replyWithPhoto(randomImg, {
+      caption: "😂🌷 ميم عشوائي 🌷",
+    });
+
+    // تفاعل رمزي (مفيش react emojis في Telegram API زي واتساب)
+    await ctx.reply("");
+  } catch (e) {
+    console.error(e);
+    ctx.reply("لا");
+  }
+});
+// قائمة الأسئلة
+const tips = [
+  "تتوقع حد يسأل عليك لو قفلت فترة ؟",
+  "اكتر كذبة مشهوره عندك",
+  "حاجة مستحيل تاكلها ",
+  "ايه الوحش ف الحياة ؟",
+  "اعلي مجموع جبته فحياتك ؟",
+  "اكتر حاجة خايف تخسرها ؟",
+  "لو قدامك تغير حاجه ف الحياة ف ايه هي ؟",
+  "عمرك عملت خدمة لشخص وهو اتبري منك ؟",
+  "اكتر هدية نفسك بيها ؟",
+  "لو كسبت خمسه مليون دولار هتعمل ايه ؟",
+  "صلي على الحبيب 🥹"
+];
+
+// دالة تجيب سؤال عشوائي
+function getRandomTip() {
+  return tips[Math.floor(Math.random() * tips.length)];
+}
+
+// لما المستخدم يكتب "اختبرني" أو "/اختبرني"
+bot.hears(/^\/?اختبرني$/, async (ctx) => {
+  const randomTip = getRandomTip();
+
+  await ctx.replyWithPhoto(
+    "https://telegra.ph/file/086ac84a0dec87b4b1561.jpg",
+    {
+      caption: `${randomTip}\n⊱─═⪨༻𓆩⚡𓆪༺⪩═─⊰`,
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: "⤸ التالي🍷 ⤹", callback_data: "اختبرني" },
+            { text: "⟦ الدعم🧚‍♀️ ⟧", callback_data: "الدعم" }
+          ]
+        ]
+      }
+    }
+  );
+});
+
+// التعامل مع الأزرار
+bot.on("callback_query", async (ctx) => {
+  const query = ctx.callbackQuery.data;
+
+  if (query === "اختبرني") {
+    const randomTip = getRandomTip();
+    await ctx.replyWithPhoto(
+      "https://telegra.ph/file/086ac84a0dec87b4b1561.jpg",
+      {
+        caption: `${randomTip}\n⊱─═⪨༻𓆩⚡𓆪༺⪩═─⊰`,
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "⤸ التالي🍷 ⤹", callback_data: "اختبرني" },
+              { text: "⟦ الدعم🧚‍♀️ ⟧", callback_data: "الدعم" }
+            ]
+          ]
+        }
+      }
+    );
+  }
+
+  if (query === "الدعم") {
+    await ctx.reply("🧚‍♀️ للتواصل مع الدعم، راسل: @T_T9_A");
+  }
+
+  await ctx.answerCbQuery();
+});
+
+
+
+
+
+bot.command("group", async (ctx) => {
+  try {
+    if (!ctx.chat || ctx.chat.type !== "supergroup") {
+      return ctx.reply("❌ هذا الأمر يعمل فقط في المجموعات!");
+    }
+
+    const groupKeyboard = [
+      [
+        { text: "『 🌷فتح الجروب🌷 』", callback_data: "open_group" },
+        { text: "『 🌷قفل الجروب🌷 』", callback_data: "close_group" }
+      ]
+    ];
+
+    await ctx.reply(
+      "‹🔓◝ اختر خياراً لفتح أو قفل الجروب ↬🔒⌯",
+      Markup.inlineKeyboard(groupKeyboard)
+    );
+  } catch (e) {
+    console.error(e);
+    ctx.reply("❌ حصل خطأ أثناء تنفيذ الأمر");
+  }
+});
+
+// حدث الضغط على زر فتح
+bot.action("open_group", async (ctx) => {
+  try {
+    await ctx.telegram.setChatPermissions(ctx.chat.id, {
+      can_send_messages: true,
+    });
+
+    await ctx.editMessageText(
+      "🌷 تم فتح الجروب 🌷🌷",
+      Markup.inlineKeyboard([
+        [{ text: "↩️ رجوع", callback_data: "back_group" }]
+      ])
+    );
+  } catch (e) {
+    console.error(e);
+    ctx.reply("❌ حصل خطأ أثناء الفتح");
+  }
+});
+
+// حدث الضغط على زر قفل
+bot.action("close_group", async (ctx) => {
+  try {
+    await ctx.telegram.setChatPermissions(ctx.chat.id, {
+      can_send_messages: false,
+    });
+
+    await ctx.editMessageText(
+      "🌷 تم قفل الجروب 🌷🌷",
+      Markup.inlineKeyboard([
+        [{ text: "↩️ رجوع", callback_data: "back_group" }]
+      ])
+    );
+  } catch (e) {
+    console.error(e);
+    ctx.reply("❌ حصل خطأ أثناء القفل");
+  }
+});
+
+// زر الرجوع للقائمة
+bot.action("back_group", async (ctx) => {
+  const groupKeyboard = [
+    [
+      { text: "『 🌷فتح الجروب🌷 』", callback_data: "open_group" },
+      { text: "『 🌷قفل الجروب🌷 』", callback_data: "close_group" }
+    ]
+  ];
+
+  await ctx.editMessageText(
+    "‹🔓◝ اختر خياراً لفتح أو قفل الجروب ↬🔒⌯",
+    Markup.inlineKeyboard(groupKeyboard)
+  );
+});
+bot.command(["bald", "botakkan"], async (ctx) => {
+  try {
+    const reply = ctx.message.reply_to_message;
+
+    // لو مفيش صورة أو مش عامل ريبلاي على صورة
+    if (!ctx.message.photo && !(reply && reply.photo)) {
+      return ctx.reply(
+        `🍷 يرجى إرسال صورة مع الأمر أو الرد على صورة بالأمر.\n\n` +
+        `🍷 مثال:\n- أرسل صورة مع تعليق: /اصلع\n- أو رد على صورة بالأمر: /اصلع\n\n` +
+        `🍷`
+      );
+    }
+
+    // جلب الصورة (الأخيرة = أعلى جودة)
+    const photo =
+      (ctx.message.photo && ctx.message.photo.slice(-1)[0]) ||
+      (reply && reply.photo && reply.photo.slice(-1)[0]);
+
+    if (!photo) return ctx.reply("❌ لم أستطع العثور على الصورة.");
+
+    await ctx.reply("🧑‍🦲 جاري المعالجة...");
+
+    // تنزيل الصورة
+    const fileLink = await ctx.telegram.getFileLink(photo.file_id);
+    const imgBuffer = (await axios.get(fileLink.href, { responseType: "arraybuffer" })).data;
+
+    // رفع على catbox
+    const form = new FormData();
+    form.append("reqtype", "fileupload");
+    form.append("fileToUpload", imgBuffer, {
+      filename: "image.jpg",
+      contentType: "image/jpeg",
+    });
+
+    const catboxRes = await axios.post("https://catbox.moe/user/api.php", form, {
+      headers: form.getHeaders(),
+    });
+
+    const imageUrl = catboxRes.data;
+    if (!imageUrl.includes("catbox.moe")) throw new Error("فشل رفع الصورة إلى Catbox.");
+
+    // API لتعديل الصورة
+    const defaultText = "تم جعل الرأس أصلع";
+    const apiUrl = `https://api.ubed.my.id/maker/Jadi-Apa-Aja?apikey=free1&imageUrl=${encodeURIComponent(
+      imageUrl
+    )}&text=${encodeURIComponent(defaultText)}`;
+
+    const { data: resultBuffer } = await axios.get(apiUrl, { responseType: "arraybuffer" });
+
+    if (!resultBuffer || resultBuffer.byteLength < 100) {
+      throw new Error("فشل الحصول على الصورة من API.");
+    }
+
+    // إرسال النتيجة
+    await ctx.replyWithPhoto({ source: Buffer.from(resultBuffer) }, {
+      caption: `🍷 هذه هي النتيجة: ${defaultText} 🍷\n\n `,
+      parse_mode: "Markdown",
+    });
+
+    await ctx.reply("🌷 تمت المعالجة بنجاح!");
+
+  } catch (err) {
+    console.error("🍷 خطأ في معالج أمر أصلع:", err);
+    ctx.reply("🍷 ❌ حدث خطأ أثناء معالجة الصورة. 🧞\n\n ");
+  }
+});
+
+
+// أمر البروفايل
+bot.command(["my_pro"], async (ctx) => {
+  try {
+    const user = ctx.message.reply_to_message
+      ? ctx.message.reply_to_message.from
+      : ctx.from;
+
+    // اسم المستخدم
+    const username = user.username
+      ? `@${user.username}`
+      : user.first_name || "مستخدم مجهول";
+
+    // الصورة الثابتة
+    const photoUrl = "https://files.catbox.moe/eb7wk8.jpg";
+
+    // النص اللي هيتبعت
+    const caption = `
+≪━─━〔 البــروفــايــل 〕━─━≫
+
+⧉⏎┇🍷〉  ⟦ الأســـــم ⟧ ⤺ ${username}
+⧉⏎┇🔗〉  ⟦ الأيــدي ⟧ ⤺ ${user.id}
+⧉⏎┇🪐〉  ⟦ البوت ⟧ ⤺ SPAM BOT 🌷🌷
+
+≪━─━〔 البــروفــايــل 〕━─━≫
+    `;
+
+    await ctx.replyWithPhoto(photoUrl, { caption, parse_mode: "Markdown" });
+  } catch (err) {
+    console.error(err);
+    ctx.reply("❌ حصل خطأ أثناء جلب البروفايل.");
+  }
+});
+
+// المطورين و المالك
+
+// عرض قائمة الجروبات اللي البوت فيها
+
+// 🟢 تحديث قاعدة البيانات عند دخول البوت جروب
+bot.on("chat_member", async (ctx) => {
+  const chat = ctx.chat;
+  const newStatus = ctx.update.chat_member.new_chat_member.status;
+  const oldStatus = ctx.update.chat_member.old_chat_member.status;
+
+  if (!global.groups) global.groups = [];
+
+  // دخل جروب
+  if (newStatus === "member" || newStatus === "administrator") {
+    if (!global.groups.find((g) => g.id === chat.id)) {
+      global.groups.push({ id: chat.id, title: chat.title || "بدون اسم" });
+    }
+  }
+
+  // خرج من جروب
+  if (newStatus === "left" || newStatus === "kicked") {
+    global.groups = global.groups.filter((g) => g.id !== chat.id);
+  }
+});
+
+// 🟢 أمر عرض الجروبات
+bot.command(["gr", "الجروبات"], async (ctx) => {
+  try {
+    if (!global.groups || global.groups.length === 0) {
+      return ctx.reply("❌ البوت مش موجود في أي جروب حالياً.");
+    }
+
+    let buttons = global.groups.map((g) => [
+      Markup.button.callback(`📛 ${g.title}`, `group_${g.id}`)
+    ]);
+
+    await ctx.reply(
+      `📋 قائمة المجموعات اللي البوت فيها:\nالعدد: ${global.groups.length}`,
+      Markup.inlineKeyboard(buttons)
+    );
+  } catch (err) {
+    console.error("خطأ في عرض الجروبات:", err);
+    ctx.reply("⚠️ حصل خطأ في عرض الجروبات.");
+  }
+});
+
+// 🟢 أزرار التحكم (سحب / تصفية / مغادرة)
+bot.action(/group_(.+)/, async (ctx) => {
+  const groupId = ctx.match[1];
+  const userId = String(ctx.from.id);
+
+  if (!OWNER_ID.includes(userId) && !DEVELOPERS.includes(userId)) {
+    return ctx.reply("⚠️ هذا الأمر مخصص للمطور فقط!");
+  }
+
+  await ctx.reply(
+    `اختر العملية على الجروب ID: ${groupId}`,
+    Markup.inlineKeyboard([
+      [Markup.button.callback("🛡️ سحب", `pull_${groupId}`)],
+      [Markup.button.callback("🔥 تصفية", `clean_${groupId}`)],
+      [Markup.button.callback("🚪 مغادرة", `leave_${groupId}`)],
+      [Markup.button.callback("↩️ رجوع", "back_groups")]
+    ])
+  );
+});
+
+// 🟢 تنفيذ الأوامر
+bot.action(/pull_(.+)/, async (ctx) => {
+  const groupId = ctx.match[1];
+  await ctx.reply(`🛡️ تم تنفيذ عملية "سحب" في الجروب ${groupId} (تجريبي).`);
+});
+
+bot.action(/clean_(.+)/, async (ctx) => {
+  const groupId = ctx.match[1];
+  await ctx.reply(`🔥 تم تنفيذ عملية "تصفية" في الجروب ${groupId} (تجريبي).`);
+});
+
+bot.action(/leave_(.+)/, async (ctx) => {
+  const groupId = ctx.match[1];
+  await ctx.reply(`🚪 جاري مغادرة الجروب ${groupId} ...`);
+  try {
+    await ctx.telegram.leaveChat(groupId);
+    global.groups = global.groups.filter((g) => g.id !== Number(groupId));
+  } catch (err) {
+    console.error(err);
+    await ctx.reply("⚠️ مقدرتش أخرج من الجروب.");
+  }
+});
+
+// 🟢 زر الرجوع للقائمة
+bot.action("back_groups", async (ctx) => {
+  if (!global.groups || global.groups.length === 0) {
+    return ctx.editMessageText("❌ البوت مش موجود في أي جروب حالياً.");
+  }
+
+  let buttons = global.groups.map((g) => [
+    Markup.button.callback(`📛 ${g.title}`, `group_${g.id}`)
+  ]);
+
+  await ctx.editMessageText(
+    `📋 قائمة المجموعات اللي البوت فيها:\nالعدد: ${global.groups.length}`,
+    Markup.inlineKeyboard(buttons)
+  );
+});
+
+// فرضًا أنك تستخدم Telegraf أو شيء مشابه
+const developerId = ['7708820857','7819888120']; // استبدل بالـ user_id الخاص بيك
+
+
+bot.command(["kick", "انطر"], async (ctx) => {
+  const chatId = ctx.chat.id;
+
+  // لازم يكون في جروب
+  if (ctx.chat.type === "private") {
+    return ctx.reply("❌ هذا الأمر يعمل فقط داخل المجموعات.");
+  }
+
+  // تحقق من صلاحيات اللي كاتب الأمر
+  const member = await ctx.telegram.getChatMember(chatId, ctx.from.id);
+  if (!["creator", "administrator"].includes(member.status)) {
+    return ctx.reply(
+      "┏━━━━━━━━━━━━━━━━⬣\n" +
+      "┇🔥┇ ↯ الأمر للادمن فقط\n" +
+      "┇🌷┇ ↯ انت مجرد عضو\n" +
+      "┗━━━━━━━━━━━━━━━━⬣"
+    );
+  }
+
+  // 🟢 استخراج الهدف (من ريبلاي أو منشن أو ID مباشر)
+  let targetUser = null;
+
+  // لو فيه ريبلاي
+  if (ctx.message.reply_to_message) {
+    targetUser = ctx.message.reply_to_message.from;
+  }
+
+  // لو فيه منشن
+  if (!targetUser && ctx.message.entities) {
+    const mentionEntity = ctx.message.entities.find(e => e.type === "mention");
+    if (mentionEntity) {
+      const username = ctx.message.text.slice(
+        mentionEntity.offset,
+        mentionEntity.offset + mentionEntity.length
+      ).replace("@", "");
+
+      try {
+        const userInfo = await ctx.telegram.getChatMember(chatId, username);
+        targetUser = userInfo.user;
+      } catch (err) {
+        console.error("❌ فشل في جلب المنشن:", err);
+      }
+    }
+  }
+
+  // لو كتب ID مباشرة بعد الأمر
+  const args = ctx.message.text.split(" ").slice(1);
+  if (!targetUser && args[0]) {
+    try {
+      const userInfo = await ctx.telegram.getChatMember(chatId, args[0]);
+      targetUser = userInfo.user;
+    } catch (err) {
+      console.error("❌ فشل في جلب المستخدم عبر ID:", err);
+    }
+  }
+
+  if (!targetUser) {
+    return ctx.reply("🌷 منشن الشخص أو رد على رسالته أو اكتب ID عشان أطرده.");
+  }
+
+  // منع طرد المطور
+  if (OWNER_ID.includes(String(targetUser.id))) {
+    return ctx.reply("🙅 مش هطرد المطور!");
+  }
+
+  // منع طرد البوت نفسه
+  if (targetUser.id === (await ctx.telegram.getMe()).id) {
+    return ctx.reply("😂 مش هطرد نفسي!");
+  }
+
+  // تنفيذ الطرد
+  try {
+    await ctx.kickChatMember(targetUser.id);
+    ctx.reply(
+      `❍━━━══━━❪🥷❫━━══━━━❍\n` +
+      `｢🍷｣⇇ تم طردك بنجاح\n` +
+      `｢🍷｣⇇ بأمر من ↜ @${ctx.from.username || ctx.from.id}\n` +
+      `❍━━━══━━❪🔥❫━━══━━━❍`,
+      { parse_mode: "Markdown" }
+    );
+  } catch (e) {
+    console.error("❌ خطأ أثناء الطرد:", e);
+    ctx.reply("❌ فشل في طرد المستخدم، تأكد أن البوت عنده صلاحيات أدمن.");
+  }
+});
+
+bot.command(["mute", "unmute"], async (ctx) => {
+  const chatId = ctx.chat.id;
+
+  // ✅ لازم يكون في جروب
+  if (ctx.chat.type === "private") {
+    return ctx.reply("❌ هذا الأمر يعمل فقط داخل المجموعات.");
+  }
+
+  // ✅ تحقق أن اللي كاتب الأمر أدمن
+  const member = await ctx.telegram.getChatMember(chatId, ctx.from.id);
+  if (!["creator", "administrator"].includes(member.status)) {
+    return ctx.reply(
+      "┏━━━━━━━━━━━━━━━━⬣\n" +
+      "┇🔥┇ ↯ الأمر للادمن فقط \n" +
+      "┇🌷┇ ↯ انت مجرد عضو \n" +
+      "┗━━━━━━━━━━━━━━━━⬣"
+    );
+  }
+
+  // 🟢 تحديد الشخص الهدف (reply أو mention أو ID)
+  let targetUser = null;
+
+  if (ctx.message.reply_to_message) {
+    targetUser = ctx.message.reply_to_message.from;
+  }
+
+  // لو فيه mention
+  if (!targetUser && ctx.message.entities) {
+    const mentionEntity = ctx.message.entities.find(e => e.type === "mention");
+    if (mentionEntity) {
+      const username = ctx.message.text.slice(
+        mentionEntity.offset,
+        mentionEntity.offset + mentionEntity.length
+      ).replace("@", "");
+      try {
+        const userInfo = await ctx.telegram.getChatMember(chatId, username);
+        targetUser = userInfo.user;
+      } catch (err) {
+        console.error("❌ فشل جلب المنشن:", err);
+      }
+    }
+  }
+
+  // لو كتب ID بعد الأمر
+  const args = ctx.message.text.split(" ").slice(1);
+  if (!targetUser && args[0]) {
+    try {
+      const userInfo = await ctx.telegram.getChatMember(chatId, args[0]);
+      targetUser = userInfo.user;
+    } catch (err) {
+      console.error("❌ فشل جلب المستخدم عبر ID:", err);
+    }
+  }
+
+  if (!targetUser) {
+    return ctx.reply("❌ منشن أو رد أو اكتب ID عشان أتعامل مع العضو.");
+  }
+
+  // 🚫 منع كتم البوت نفسه أو المطور
+  if (OWNER_ID.includes(String(targetUser.id))) {
+    return ctx.reply("🙅 مش هكتم المطور!");
+  }
+  if (targetUser.id === (await ctx.telegram.getMe()).id) {
+    return ctx.reply("😂 مش هكتم نفسي!");
+  }
+
+  try {
+    if (ctx.message.text.startsWith("/mute")) {
+      // كتم
+      await ctx.restrictChatMember(targetUser.id, {
+        permissions: { can_send_messages: false }
+      });
+
+      ctx.reply(
+        `🔇 تم كتم العضو [${targetUser.first_name}](tg://user?id=${targetUser.id})`,
+        { parse_mode: "Markdown" }
+      );
+    } else if (ctx.message.text.startsWith("/unmute")) {
+      // فك الكتم
+      await ctx.restrictChatMember(targetUser.id, {
+        permissions: { can_send_messages: true }
+      });
+
+      ctx.reply(
+        `🔊 تم إلغاء الكتم عن [${targetUser.first_name}](tg://user?id=${targetUser.id})`,
+        { parse_mode: "Markdown" }
+      );
+    }
+  } catch (err) {
+    console.error("❌ خطأ في mute/unmute:", err);
+    ctx.reply("🌷 حصل خطأ، تأكد أن البوت عنده صلاحيات الأدمن.");
+  }
+});
+
+
+// البحث عن مستودعات
+
+
+// ماب لتخزين بيانات الريبو مؤقتاً
+const repoCache = new Map();
+
+bot.command("git", async (ctx) => {
+  try {
+    const text = ctx.message.text.split(" ").slice(1).join(" ");
+    if (!text) {
+      return ctx.reply(
+        `❌ يرجي إدخال إسم المشروع للبحث.\nمثال:\n/git TheMystic-Bot-MD`
+      );
+    }
+
+    const res = await fetch(`https://api.github.com/search/repositories?q=${encodeURIComponent(text)}`);
+    if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+
+    const json = await res.json();
+    if (!json.items || json.items.length === 0) {
+      return ctx.reply("⚠️ لم يتم العثور على أي مشروع بهذا الاسم.");
+    }
+
+    const repos = json.items.slice(0, 10); // أول 10 فقط
+
+    let buttons = repos.map((repo, index) => {
+      const cacheId = `${ctx.from.id}_${Date.now()}_${index}`;
+      repoCache.set(cacheId, {
+        user: repo.owner.login,
+        repo: repo.name
+      });
+
+      return [Markup.button.callback(`📂 ${repo.full_name}`, `download_${cacheId}`)];
+    });
+
+    await ctx.reply(
+      `🔎 نتائج البحث عن: ${text}\n\nاختر المستودع المطلوب للتحميل 👇`,
+      {
+        parse_mode: "Markdown",
+        ...Markup.inlineKeyboard(buttons)
+      }
+    );
+  } catch (error) {
+    console.error(error);
+    ctx.reply(`⚠️ خطأ: ${error.message}`);
+  }
+});
+
+// هاندلر لتحميل المستودع كـ ZIP
+bot.action(/download_(.+)/, async (ctx) => {
+  try {
+    await ctx.answerCbQuery();
+
+    const cacheId = ctx.match[1];
+    const repoData = repoCache.get(cacheId);
+
+    if (!repoData) {
+      return ctx.reply("⚠️ انتهت صلاحية هذا الزر، ابحث مرة أخرى.");
+    }
+
+    const { user, repo } = repoData;
+    const url = `https://api.github.com/repos/${user}/${repo}/zipball`;
+
+    await ctx.reply(`⬇️ جاري تحميل المستودع: *${repo}*`, { parse_mode: "Markdown" });
+
+    await ctx.replyWithDocument({
+      url,
+      filename: `${repo}.zip`
+    });
+  } catch (error) {
+    console.error(error);
+    ctx.reply(`⚠️ خطأ أثناء التحميل: ${error.message}`);
+  }
+});
+
+bot.command(["admin", "ترقيه", "رفع", "ارفعو", "رول"], async (ctx) => {
+  const chatId = ctx.chat.id;
+
+  // لازم يكون في جروب
+  if (ctx.chat.type === "private") {
+    return ctx.reply("❌ هذا الأمر يعمل فقط داخل المجموعات.");
+  }
+
+  // تحقق أن اللي كاتب الأمر أدمن
+  const member = await ctx.telegram.getChatMember(chatId, ctx.from.id);
+  if (!["creator", "administrator"].includes(member.status)) {
+    return ctx.reply("┏━━━━━━━━━━━━━━━━⬣\n┇🔥┇ ↯ الأمر الادمن بس \n❐⊹━━━━━『𝙎𝙋𝘼𝙈』━━━━━⊹❐\n┇🌷┇ ↯ انتا مجرد عضو \n┗━━━━━━━━━━━━━━━━⬣");
+  }
+
+  // تحديد الشخص المطلوب ترقيته (من reply أو mention)
+  let target = null;
+
+  if (ctx.message.reply_to_message) {
+    target = ctx.message.reply_to_message.from;
+  } else if (ctx.message.entities) {
+    const mention = ctx.message.entities.find((e) => e.type === "mention");
+    if (mention) {
+      const username = ctx.message.text.slice(mention.offset + 1, mention.offset + mention.length);
+      try {
+        const user = await ctx.telegram.getChatMember(chatId, username);
+        target = user.user;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }
+
+  if (!target) {
+    return ctx.reply("🌷 منشن الشخص أو رد على رسالته عشان أرفعه أدمن.");
+  }
+
+  // منع ترقية البوت نفسه
+  if (target.id === (await ctx.telegram.getMe()).id) {
+    return ctx.reply("😂 البوت مش ممكن يرقي نفسه!");
+  }
+
+  try {
+    await ctx.telegram.promoteChatMember(chatId, target.id, {
+      can_manage_chat: true,
+      can_delete_messages: true,
+      can_manage_video_chats: true,
+      can_restrict_members: true,
+      can_promote_members: false,
+      can_invite_users: true,
+      can_pin_messages: true,
+    });
+
+    ctx.reply(
+      `‹⌗› تـم تـرقـيـة ↜ @${target.username || target.id} لـ مشرف بنجاح ‹⌗›`,
+      { parse_mode: "Markdown" }
+    );
+  } catch (e) {
+    console.error(e);
+    ctx.reply("❌ فشل في الترقية، تأكد أن البوت عنده صلاحيات الأدمن.");
+  }
+});
+const hina = [
+  "2023","2024","2025","2026","2027","2028","2029","2030","2031","2032","2033","2034","2035","2036","2037","2038","2039","2040","2041","2042","2043","2044","2045","2046","2047","2048","2049","2050","2051","2052","2053","2054","2055","2056","2057","2058","2059","2060","2061","2062","2063","2064","2065","2066","2067","2068","2069","2070","2071","2072","2073","2074","2075","2076","2077","2078","2079","2080","2081","2082","2083","2084","2085","2089","2090","2091","2092","2093","2094","2095","2096","2097","2098","2099","2100","2101","2102","2103","2104","2105","2106","2107","2108","2109","2110","2111","2112","2113","2114","2115","2116","2117","2118","2119","2120","2121","2122","2123","2124","2125","2126","2127","2128","2129","2130"
+];
+
+const hinax = [
+  "ملاريا","انتحار","السل رئوي","مرض السكري","حادث مرور","سرطان الكبد","سرطان الدم","السقوط من مرتفع","تعفن الجلد","احتراق","تليف الكبد","الغرق","الأنتحار","القتل","جريمة قتل","كورونا","كوفيد","انسداد رئوي مزمن","ايدز","خطأ طبي","الوقوع من الجبل","رصاصة طائشة","التعرض لغازات سامة","سرطان الرئة","الجوع","الغرق","الاحتراق","الموت المفاجئ","اختناق","انفجار سيارة","التعرض للأشعاعات","زلزال","ابتلاع الزرنيخ"
+];
+
+const hinaxx = ["1","2","3","4","5","6","7","8","9","10","11","12"];
+
+// دالة اختيار عشوائ
+// الأمر
+bot.command("die", async (ctx) => {
+  const cause = pickRandom(hinax);
+  const year = pickRandom(hina);
+  const month = pickRandom(hinaxx);
+  const day = Math.floor(Math.random() * 30) + 1;
+
+  const message = `
+⌬ ❛╏ سبب الوفاه: ${cause}
+
+⌬ ❛╏ تاريخ الوفاة: ${day}/${month}/${year}
+
+
+
+> ⚠️ تنويه: اللعبه للمزح فقط لا تأخذها بجديه.
+  `;
+
+  await ctx.reply(message, { parse_mode: "Markdown" });
+});
+// دالة لتحويل البايت لحجم مقروء
+let games = {};
+
+// 🟢 أمر بدء اللعبة
+bot.command("xo", async (ctx) => {
+  const chatId = ctx.chat.id;
+  const sender = ctx.from.id;
+
+  if (games[chatId]) {
+    return ctx.reply("⚠ هناك لعبة جارية بالفعل في هذه المجموعة!");
+  }
+
+  games[chatId] = {
+    player1: sender,
+    player2: null,
+    board: ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"],
+    turn: null,
+    started: false,
+  };
+
+  return ctx.reply(
+    `🎮 تم إنشاء لعبة إكس أو بواسطة [${ctx.from.first_name}](tg://user?id=${sender})!
+ اكتب /x_o للدخول كمنافس.
+ أو /x_del لإلغاء اللعبة قبل بدايتها.`,
+    { parse_mode: "Markdown" }
+  );
+});
+
+// 🟢 أمر الانضمام
+bot.command("x_o", async (ctx) => {
+  const chatId = ctx.chat.id;
+  const sender = ctx.from.id;
+  const game = games[chatId];
+
+  if (!game) return ctx.reply("⚠ لا توجد لعبة مفعلة حالياً.\nاكتب /xo لإنشاء واحدة.");
+  if (game.started) return ctx.reply("🌷 اللعبة بدأت بالفعل!");
+  if (sender === game.player1) return ctx.reply("⚠ لا يمكنك الانضمام لنفسك!");
+  if (game.player2) return ctx.reply("⚠ تم الانضمام بالفعل من قبل لاعب آخر.");
+
+  game.player2 = sender;
+  game.turn = game.player1;
+  game.started = true;
+
+  const boardText = formatBoard(game.board);
+
+  return ctx.reply(
+    `🎮 تم بدء التحدي بين:
+
+❌ [${ctx.from.first_name}](tg://user?id=${game.player1})
+⭕ [${ctx.from.first_name}](tg://user?id=${game.player2})
+
+✨ دور: [اللاعب](tg://user?id=${game.turn})
+
+${boardText}
+🔢 اختر رقمًا من (1-9) للعب!`,
+    { parse_mode: "Markdown" }
+  );
+});
+
+// 🟢 أمر الحذف
+bot.command("x_del", (ctx) => {
+  const chatId = ctx.chat.id;
+  const sender = ctx.from.id;
+  const game = games[chatId];
+
+  if (!game) return ctx.reply("⚠ لا توجد لعبة لحذفها.");
+  if (sender !== game.player1) return ctx.reply("⚠ فقط منشئ اللعبة يمكنه حذفها.");
+
+  delete games[chatId];
+  return ctx.reply("🌷 تم حذف اللعبة بنجاح.");
+});
+
+// 🟢 اللعب بالأرقام (1-9)
+bot.hears(/^[1-9]$/, (ctx) => {
+  const chatId = ctx.chat.id;
+  const sender = ctx.from.id;
+  const move = ctx.message.text;
+
+  const game = games[chatId];
+  if (!game || !game.started) return;
+
+  if (![game.player1, game.player2].includes(sender))
+    return ctx.reply("❌ أنت لست مشاركًا في هذه اللعبة!");
+
+  if (sender !== game.turn)
+    return ctx.reply("🌷 ليس دورك!");
+
+  const index = parseInt(move) - 1;
+  if (["❌", "⭕"].includes(game.board[index]))
+    return ctx.reply("⚠ هذه الخانة مشغولة.");
+
+  game.board[index] = sender === game.player1 ? "❌" : "⭕";
+  game.turn = sender === game.player1 ? game.player2 : game.player1;
+
+  const boardText = formatBoard(game.board);
+  const winner = checkWinner(game.board);
+
+  if (winner) {
+    const winnerId = winner === "❌" ? game.player1 : game.player2;
+    delete games[chatId];
+    return ctx.reply(
+      `🎉 الفائز: [اللاعب](tg://user?id=${winnerId})\n\n${boardText}`,
+      { parse_mode: "Markdown" }
+    );
+  }
+
+  if (!game.board.some((cell) => /[1-9]/.test(cell))) {
+    delete games[chatId];
+    return ctx.reply(`🤝 انتهت اللعبة بالتعادل!\n\n${boardText}`, {
+      parse_mode: "Markdown",
+    });
+  }
+
+  return ctx.reply(
+    `✨ دور: [اللاعب](tg://user?id=${game.turn})\n\n${boardText}`,
+    { parse_mode: "Markdown" }
+  );
+});
+
+// 🟢 دوال مساعدة
+function formatBoard(board) {
+  return `
+${board[0]} | ${board[1]} | ${board[2]}
+─────────
+${board[3]} | ${board[4]} | ${board[5]}
+─────────
+${board[6]} | ${board[7]} | ${board[8]}`;
+}
+
+function checkWinner(board) {
+  const winPatterns = [
+    [0,1,2],[3,4,5],[6,7,8],
+    [0,3,6],[1,4,7],[2,5,8],
+    [0,4,8],[2,4,6],
+  ];
+  for (const [a,b,c] of winPatterns) {
+    if (board[a] === board[b] && board[b] === board[c]) return board[a];
+  }
+  return null;
+}
+// 🛠️ دالة تحويل البايت لحجم مقروء
+function formatBytes(bytes) {
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+}
+
+// أمر تحميل فيديو mp4
+bot.command("vid", async (ctx) => {
+  const query = ctx.message.text.replace("/vid", "").trim();
+
+  if (!query) {
+    return ctx.reply("❌ من فضلك اكتب رابط يوتيوب بعد الأمر. مثال:\n/vid https://youtu.be/xyz");
+  }
+
+  try {
+    const apiUrl = `https://api.zenkey.my.id/api/download/ytmp4?apikey=zenkey&url=${encodeURIComponent(query)}`;
+    const response = await fetch(apiUrl);
+    const result = await response.json();
+
+    if (result.status && result.result?.download_url) {
+      // حجم الفيديو (لو موجود في الـ API)
+      const size = result.result.size ? formatBytes(result.result.size) : "غير معروف";
+
+      await ctx.replyWithVideo(
+        { url: result.result.download_url },
+        { caption: `🎥 ${result.result.title}\n📦 الحجم: ${size}` }
+      );
+    } else {
+      ctx.reply("❌ فشل التحميل. تأكد من الرابط أو جرب مرة تانية.");
+    }
+  } catch (error) {
+    console.error(error);
+    ctx.reply("🌷 حصل خطأ أثناء الاتصال بـ API.");
+  }
+});
+// ✨ دالة لرفع الملف على catbox
+bot.command(["facebook", "fb"], async (ctx) => {
+  const query = ctx.message.text.split(" ").slice(1).join(" ");
+  if (!query) {
+    return ctx.reply(
+      "⌗ أرسل رابط فيديو فيسبوك 📺\n\nمثال:\n/facebook https://fb.watch/xxxx"
+    );
+  }
+
+  await ctx.reply("🌷 جاري جلب الفيديو من فيسبوك ..");
+
+  try {
+    const getFBInfo = (videoUrl) => {
+      const headers = {
+        "sec-fetch-user": "?1",
+        "sec-ch-ua-mobile": "?0",
+        "sec-fetch-site": "none",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "cache-control": "max-age=0",
+        authority: "www.facebook.com",
+        "upgrade-insecure-requests": "1",
+        "accept-language":
+          "en-GB,en;q=0.9,tr-TR;q=0.8,tr;q=0.7,en-US;q=0.6",
+        "sec-ch-ua":
+          '"Google Chrome";v="89", "Chromium";v="89", ";Not A Brand";v="99"',
+        "user-agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.114 Safari/537.36",
+        accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+      };
+
+      const parseString = (string) =>
+        JSON.parse(`{"text": "${string}"}`).text;
+
+      return new Promise((resolve, reject) => {
+        if (!videoUrl || !videoUrl.trim()) {
+          return reject("❌ من فضلك أرسل رابط صحيح");
+        }
+        if (
+          ["facebook.com", "fb.watch"].every(
+            (domain) => !videoUrl.includes(domain)
+          )
+        ) {
+          return reject("❌ الرابط ليس من فيسبوك");
+        }
+
+        axios
+          .get(videoUrl, { headers })
+          .then(({ data }) => {
+            data = data
+              .replace(/&quot;/g, '"')
+              .replace(/&amp;/g, "&");
+
+            const sdMatch =
+              data.match(/"browser_native_sd_url":"(.*?)"/) ||
+              data.match(/"playable_url":"(.*?)"/) ||
+              data.match(/sd_src\s*:\s*"([^"]*)"/) ||
+              data.match(/(?<="src":")[^"]*(https:\/\/[^"]*)/);
+
+            const hdMatch =
+              data.match(/"browser_native_hd_url":"(.*?)"/) ||
+              data.match(/"playable_url_quality_hd":"(.*?)"/) ||
+              data.match(/hd_src\s*:\s*"([^"]*)"/);
+
+            const titleMatch = data.match(
+              /<meta\sname="description"\scontent="(.*?)"/
+            );
+            const thumbMatch = data.match(
+              /"preferred_thumbnail":{"image":{"uri":"(.*?)"/
+            );
+
+            if (sdMatch && sdMatch[1]) {
+              const result = {
+                url: videoUrl,
+                sd: parseString(sdMatch[1]),
+                hd:
+                  hdMatch && hdMatch[1]
+                    ? parseString(hdMatch[1])
+                    : "",
+                title:
+                  titleMatch && titleMatch[1]
+                    ? parseString(titleMatch[1])
+                    : data.match(/<title>(.*?)<\/title>/)?.[1] ??
+                      "",
+                thumbnail:
+                  thumbMatch && thumbMatch[1]
+                    ? parseString(thumbMatch[1])
+                    : "",
+              };
+              resolve(result);
+            } else {
+              reject(
+                "🌷 لم أتمكن من استخراج الفيديو، حاول مرة أخرى"
+              );
+            }
+          })
+          .catch(() =>
+            reject("🌷 لم أتمكن من استخراج الفيديو، حاول مرة أخرى")
+          );
+      });
+    };
+
+    const hasilny = await getFBInfo(query);
+    let vd = `🎬 ${hasilny.title}`;
+
+    await ctx.replyWithVideo(
+      { url: hasilny.hd || hasilny.sd },
+      { caption: vd }
+    );
+  } catch (e) {
+    ctx.reply("❌ حصل خطأ أثناء جلب الفيديو من فيسبوك");
+  }
+});
+
+
+// قاعدة بيانات مؤقتة (ممكن تحفظها في JSON أو DB)
+let warnings = {}; // { chatId: { userId: count } }
+
+bot.command(["warn", "تحذير", "انذار"], async (ctx) => {
+  const chatId = ctx.chat.id;
+
+  if (ctx.chat.type === "private") {
+    return ctx.reply("⚠️ هذا الأمر يعمل فقط داخل المجموعات.");
+  }
+
+  // تحقق من صلاحيات الأدمن
+  const member = await ctx.telegram.getChatMember(chatId, ctx.from.id);
+  if (!["creator", "administrator"].includes(member.status)) {
+    return ctx.reply("⚠️ هذا الأمر مخصص فقط للمشرفين.");
+  }
+
+  // تحديد الهدف
+  let targetId, targetName;
+  if (ctx.message.reply_to_message) {
+    targetId = ctx.message.reply_to_message.from.id;
+    targetName = ctx.message.reply_to_message.from.first_name;
+  } else {
+    return ctx.reply("❗ قم بالرد على رسالة العضو الذي تريد تحذيره.");
+  }
+
+  // زيادة التحذير
+  if (!warnings[chatId]) warnings[chatId] = {};
+  if (!warnings[chatId][targetId]) warnings[chatId][targetId] = 0;
+
+  warnings[chatId][targetId]++;
+  const count = warnings[chatId][targetId];
+
+  await ctx.reply(
+    `┏┅ ━━━━━━━━━━━━━━━━ ┅ ━┓
+┃╻⚠️╹↵ ٭ تم تحذير المستخدم ٭ ↯
+┣ ┅ ━━━━━━━━━━━━━━━━ ┅ ━⊹❐
+┃╻👤╹↵ ٭ المستخدم ↯
+┃╻📧╹↵ ٭〙${targetName}〘
+┃╻❗╹↵ ٭ التحذيرات:〙 ${count}/3 〘
+┗┅ ━━━━━━━━━━━━━━━━ ┅ ━`,
+    { parse_mode: "Markdown" }
+  );
+
+  // لو وصل 3
+  if (count >= 3) {
+    warnings[chatId][targetId] = 0;
+    await ctx.reply(
+      `❍━━━══━━❪🌷❫━━══━━━❍
+「👻」⇇ 『حذرتك ثلاث مرات!!』 ⇇「🌷」
+「🍁」⇇ 『${targetName}』 لقد تجاوزت 3 تحذيرات.
+「🌟」⇇ 『سيتم طردك الآن!』 👽
+❍━━━══━━❪🌷❫━━══━━━❍`,
+      { parse_mode: "Markdown" }
+    );
+
+    try {
+      await ctx.kickChatMember(targetId);
+    } catch (err) {
+      console.error(err);
+      ctx.reply("❌ فشل في محاولة طرد العضو (تأكد أن البوت أدمن).");
+    }
+  }
+});
+
+// ===== Suno API Class =====
+class SunoAPI {
+  constructor() {
+    this.baseURL = "https://suno.exomlapi.com";
+    this.headers = {
+      accept: "*/*",
+      "content-type": "application/json",
+      origin: "https://suno.exomlapi.com",
+      referer: "https://suno.exomlapi.com/",
+      "user-agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    };
+    this.interval = 3000; // 3 ثواني
+    this.timeout = 300000; // 5 دقائق
+  }
+
+  async generate({ prompt }) {
+    let taskId, token;
+    try {
+      // إرسال الطلب للتوليد
+      const generateResponse = await axios.post(
+        `${this.baseURL}/generate`,
+        { prompt },
+        { headers: this.headers }
+      );
+
+      ({ taskId, token } = generateResponse.data);
+
+      // متابعة الحالة
+      const startTime = Date.now();
+      while (Date.now() - startTime < this.timeout) {
+        await new Promise((resolve) => setTimeout(resolve, this.interval));
+
+        const statusResponse = await axios.post(
+          `${this.baseURL}/check-status`,
+          { taskId, token },
+          { headers: this.headers }
+        );
+
+        if (
+          statusResponse.data.results?.every(
+            (res) => res.audio_url && res.image_url && res.lyrics
+          )
+        ) {
+          return statusResponse.data;
+        }
+      }
+      return { status: "timeout" };
+    } catch (error) {
+      return {
+        status: "error",
+        error: error.response?.data || error.message,
+      };
+    }
+  }
+}
+
+// ===== بوت تيليجرام =====
+
+bot.command(["suno", "اغنيتي"], async (ctx) => {
+  const text = ctx.message.text.split(" ").slice(1).join(" ");
+  if (!text) {
+    return ctx.reply(
+      "❌︙الرجاء كتابة وصف للأغنية 🎶\n\nمثال:\n`/suno Father`"
+    );
+  }
+
+  await ctx.reply(
+    `╭─❍〈 🎶 𝐒𝐔𝐍𝐎 𝐀𝐈 𝐌𝐔𝐒𝐈𝐂 〉❍─╮\n│⌲ جاري صنع أغنيتك 🎧✨\n│⌲ المرجو الانتظار ⏳\n╰───═❍⊱❁✿❁⊰❍═───╯`
+  );
+
+  const api = new SunoAPI();
+  const result = await api.generate({ prompt: text });
+
+  if (result.status === "error") {
+    return ctx.reply(`❌︙حدث خطأ أثناء التوليد:\n\n${JSON.stringify(result.error, null, 2)}`);
+  }
+
+  if (result.status === "timeout") {
+    return ctx.reply(`⏳︙انتهى الوقت ولم يتم استلام النتائج 🌷`);
+  }
+
+  // إرسال أول نتيجتين فقط
+  const itemsToSend = result.results.slice(0, 2);
+
+  for (const [index, item] of itemsToSend.entries()) {
+    try {
+      if (index > 0)
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // إرسال الصوت + الكلمات
+      await ctx.replyWithAudio(
+        { url: item.audio_url },
+        {
+          title: `SunoAI Track ${index + 1}`,
+          performer: "SunoAI",
+          caption: `🎵 ${index + 1}/${itemsToSend.length}\n🎶︙*الكلمات:*\n\n${item.lyrics}`,
+        }
+      );
+
+      // إرسال صورة الغلاف
+      await ctx.replyWithPhoto(
+        { url: item.image_url },
+        {
+          caption: `🌷︙*صورة الغلاف ${index + 1}/${itemsToSend.length}* 🎶`,
+        }
+      );
+    } catch (error) {
+      console.error("خطأ أثناء الإرسال:", error);
+      await ctx.reply(
+        `❌︙حدث خطأ في إرسال النتيجة ${index + 1}\n\n${error.message}`
+      );
+    }
+  }
+});
+
+// الكود اللي انت بعته (مكتبة SaveTube)
+const savetube = {
+  api: {
+    base: "https://media.savetube.me/api",
+    cdn: "/random-cdn",
+    info: "/v2/info",
+    download: "/download"
+  },
+  headers: {
+    'accept': '*/*',
+    'content-type': 'application/json',
+    'origin': 'https://yt.savetube.me',
+    'referer': 'https://yt.savetube.me/',
+    'user-agent': 'Postify/1.0.0'
+  },
+  formats: ['144', '240', '360', '480', '720', '1080', 'mp3'],
+  crypto: {
+    hexToBuffer: (hexString) => {
+      const matches = hexString.match(/.{1,2}/g);
+      return Buffer.from(matches.join(''), 'hex');
+    },
+    decrypt: async (enc) => {
+      const secretKey = 'C5D58EF67A7584E4A29F6C35BBC4EB12';
+      const data = Buffer.from(enc, 'base64');
+      const iv = data.slice(0, 16);
+      const content = data.slice(16);
+      const key = savetube.crypto.hexToBuffer(secretKey);
+      const decipher = crypto.createDecipheriv('aes-128-cbc', key, iv);
+      let decrypted = decipher.update(content);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+      return JSON.parse(decrypted.toString());
+    }
+  },
+  isUrl: str => { 
+    try { new URL(str); return true; } catch (_) { return false; } 
+  },
+  youtube: url => {
+    if (!url) return null;
+    const a = [
+      /youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
+      /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+      /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
+      /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+      /youtu\.be\/([a-zA-Z0-9_-]{11})/
+    ];
+    for (let b of a) {
+      if (b.test(url)) return url.match(b)[1];
+    }
+    return null;
+  },
+  request: async (endpoint, data = {}, method = 'post') => {
+    try {
+      const { data: response } = await axios({
+        method,
+        url: `${endpoint.startsWith('http') ? '' : savetube.api.base}${endpoint}`,
+        data: method === 'post' ? data : undefined,
+        params: method === 'get' ? data : undefined,
+        headers: savetube.headers
+      });
+      return { status: true, code: 200, data: response };
+    } catch (error) {
+      return { status: false, code: error.response?.status || 500, error: error.message };
+    }
+  },
+  getCDN: async () => {
+    const response = await savetube.request(savetube.api.cdn, {}, 'get');
+    if (!response.status) return response;
+    return { status: true, code: 200, data: response.data.cdn };
+  },
+  download: async (link, format) => {
+    if (!link) return { status: false, code: 400, error: "❌ فين الرابط يا معلم؟" };
+    if (!savetube.isUrl(link)) return { status: false, code: 400, error: "❌ الرابط مش صحيح" };
+    if (!format || !savetube.formats.includes(format)) {
+      return { status: false, code: 400, error: `❌ الصيغة مش موجودة، الصيغ المتاحة: ${savetube.formats.join(", ")}` };
+    }
+    const id = savetube.youtube(link);
+    if (!id) return { status: false, code: 400, error: "❌ مش قادر أستخرج كود الفيديو" };
+    try {
+      const cdnx = await savetube.getCDN();
+      if (!cdnx.status) return cdnx;
+      const cdn = cdnx.data;
+      const result = await savetube.request(`https://${cdn}${savetube.api.info}`, {
+        url: `https://www.youtube.com/watch?v=${id}`
+      });
+      if (!result.status) return result;
+      const decrypted = await savetube.crypto.decrypt(result.data.data);
+      const dl = await savetube.request(`https://${cdn}${savetube.api.download}`, {
+        id: id,
+        downloadType: format === 'mp3' ? 'audio' : 'video',
+        quality: format === 'mp3' ? '128' : format,
+        key: decrypted.key
+      });
+      return {
+        status: true,
+        code: 200, 
+        result: {
+          title: decrypted.title || "بدون عنوان",
+          type: format === 'mp3' ? 'audio' : 'video',
+          format: format,
+          thumbnail: decrypted.thumbnail || `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`,
+          download: dl.data.data.downloadUrl,
+          id: id,
+          duration: decrypted.duration,
+          quality: format === 'mp3' ? '128' : format
+        }
+      };
+    } catch (error) {
+      return { status: false, code: 500, error: error.message };
+    }
+  }
+};
+
+// أمر التحميل
+bot.command("ytmp4", async (ctx) => {
+  const text = ctx.message.text.split(" ").slice(1);
+  const url = text[0];
+  const format = text[1] || "360"; // افتراضي 360p
+  
+  if (!url) return ctx.reply("❌ حط لينك اليوتيوب بعد الأمر.\nمثال:\n/ytmp4 https://youtu.be/xxxx 720");
+
+  ctx.reply("🌷 جاري التحميل، استنى عليا...");
+  try {
+    const result = await savetube.download(url, format);
+    if (!result.status) return ctx.reply("❌ خطأ: " + result.error);
+
+    await ctx.replyWithPhoto({ url: result.result.thumbnail }, { caption: `🎬 ${result.result.title}\n🌷 الجودة: ${result.result.quality}p` });
+    await ctx.replyWithVideo({ url: result.result.download }, { caption: "🕹️ تم التحميل بنجاح 🎉" });
+
+  } catch (err) {
+    ctx.reply("❌ حصل خطأ: " + err.message);
+  }
+});
+
+
+
+const vo = {
+  api: {
+    voice: "https://text.pollinations.ai"
+  },
+
+  voiceModels: [
+{ name: "a", arName: "alloy", desc: "صوت متوازن ومحايد", value: "alloy" },
+    { name: "إيكو", arName: "ايكو", desc: "صوت عميق وقوي", value: "echo" },
+    { name: "فابل", arName: "فابل", desc: "صوت دافئ وسردي", value: "fable" },
+    { name: "أونيكس", arName: "أونيكس", desc: "صوت مهيب وجاد", value: "onyx" },
+    { name: "نوفا", arName: "نوفا", desc: "صوت ودود واحترافي", value: "nova" },
+    { name: "شيمر", arName: "شيمر", desc: "صوت خفيف ومشرق", value: "shimmer" },
+    { name: "كورال", arName: "كورال", desc: "صوت لطيف وهادئ", value: "coral" },
+    { name: "فيرس", arName: "مارك", desc: "صوت حيوي ومؤثر", value: "verse" },
+    { name: "بالاد", arName: "حبيب", desc: "صوت عاطفي وناعم", value: "ballad" },
+    { name: "آش", arName: "آش", desc: "صوت مفكر وثابت", value: "ash" },
+    { name: "سايج", arName: "حكيم", desc: "صوت حكيم وخبير", value: "sage" },
+    { name: "أموش", arName: "نشيط", desc: "صوت غني ومليء", value: "amuch" },
+    { name: "أستر", arName: "كورو", desc: "صوت واضح ومباشر", value: "aster" },
+    { name: "بروك", arName: "بروك", desc: "صوت سلس ومريح", value: "brook" },
+    { name: "كلوفر", arName: "ندي", desc: "صوت نشيط وصغير السن", value: "clover" },
+    { name: "دان", arName: "دان", desc: "صوت رجولي وثابت", value: "dan" },
+    { name: "إيلان", arName: "ايلان", desc: "صوت أنيق وطليق", value: "elan" }
+  ],
+
+  voice: async (text, voiceValue) => {
+    try {
+      const voiceUrl = `${vo.api.voice}/${encodeURIComponent(text)}?model=openai-audio&voice=${voiceValue}`;
+      return voiceUrl;
+    } catch (error) {
+      throw new Error(`فشل توليد الصوت: ${error.message}`);
+    }
+  }
+};
+
+// أمر الأصوات: لعرض قائمة كل الأصوات
+bot.command("vo", async (ctx) => {
+  const voicesList = vo.voiceModels.map(v =>
+    `🔊 ${v.arName} (/voice_${v.arName}) - ${v.desc}`
+  ).join("\n");
+
+  await ctx.replyWithMarkdown(`🎤 قائمة الأصوات المتاحة:\n\n${voicesList}\n\nمثال الاستخدام:\n/voice_أونيكس مرحبًا كيف حالك؟`);
+});
+
+// أوامر توليد الصوت لكل صوت
+vo.voiceModels.forEach(v => {
+  bot.command(`voice_${v.arName}`, async (ctx) => {
+    const text = ctx.message.text.replace(`/voice_${v.arName}`, "").trim();
+
+    if (!text) {
+      return ctx.reply(`❌ من فضلك اكتب النص بعد الأمر. مثال:\n/voice_${v.arName} مرحبا`);
+    }
+
+    try {
+      const audioUrl = await vo.voice(text, v.value);
+      await ctx.replyWithAudio({ url: audioUrl }, { title: `${v.arName}.mp3` });
+    } catch (err) {
+      console.error("Voice error:", err);
+      await ctx.reply("❌ حدث خطأ أثناء توليد الصوت. يرجى المحاولة مرة أخرى.");
+    }
+  });
+});//======
+// alloy
+
+// دالة توليد الصوت مع retry
+async function generateVoice(text, voice = "alloy", retries = 2) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const audioUrl = await vo.voice(text, voice);
+
+      if (!audioUrl) continue; // لو مفيش رابط جرب تاني
+
+      const res = await axios.head(audioUrl);
+      if (!res.headers["content-length"] || parseInt(res.headers["content-length"]) < 1000) {
+        continue; // لو الصوت فاضي جرب تاني
+      }
+
+      return audioUrl; // 🕹️ صوت سليم
+    } catch (err) {
+      console.error(`Voice attempt ${i + 1} failed:`, err);
+      // يجرب تاني لو لسه في محاولات
+    }
+  }
+  return null; // ❌ كل المحاولات فشلت
+}
+
+// أمر alloy
+bot.command("spam", async (ctx) => {
+  const text = ctx.message.text.replace("/alloy", "").trim();
+  if (!text) return ctx.reply("❌ من فضلك اكتب النص بعد الأمر. مثال:\n/alloy Hello, how are you?");
+
+  const audioUrl = await generateVoice(text, "alloy");
+
+  if (!audioUrl) {
+    return ctx.reply("❌ حصلت مشكلة في توليد الصوت حتى بعد المحاولة التانية. جرب تاني بعد شوية.");
+  }
+
+  await ctx.replyWithAudio({ url: audioUrl }, { title: "alloy.mp3" });
+});
+
+// رد عن المطور
+bot.hears(/المطور|اونر|المالك|مين صاحب البوت/i, async (ctx) => {
+  const text = "بص يا معلم، المطورين بتوعي هما مالك و تيربو و سمكه و فارس. والاونر الكبير هو تيم اسبام. و احنا شغالين بالمصري كده على طول يا صاحبي.";
+  const audioUrl = await generateVoice(text, "alloy");
+
+  if (!audioUrl) {
+    return ctx.reply("❌ الصوت بتاع المطورين ماطلعش حتى بعد المحاولة التانية. جرب تاني.");
+  }
+
+  await ctx.replyWithAudio({ url: audioUrl }, { title: "owner.mp3" });
+});
+// رد بالصوت باللهجة المصرية لو حد سأل عن المطور
+bot.hears(/المطور|اونر|المالك|مين صاحب البوت/i, async (ctx) => {
+  try {
+    const text = "بص يا معلم، المطورين بتوعي هما مالك و تيربو و سمكه و فارس. والاونر الكبير هو تيم اسبام. و احنا شغالين بالمصري كده على طول يا صاحبي.";
+    const audioUrl = await vo.voice(text, "alloy");
+
+    if (!audioUrl) {
+      return ctx.reply("❌ الصوت بتاع المطورين طلع فاضي، جرب تاني.");
+    }
+
+    const res = await axios.head(audioUrl);
+    if (!res.headers["content-length"] || parseInt(res.headers["content-length"]) < 1000) {
+      return ctx.reply("❌ الصوت طلع فاضي. جرب تاني.");
+    }
+
+    await ctx.replyWithAudio({ url: audioUrl }, { title: "owner.mp3" });
+  } catch (err) {
+    console.error("Voice owner error:", err);
+    await ctx.reply("❌ في مشكلة في الصوت، جرب تاني.");
+  }
+});
+
+// echo
+bot.command("echo", async (ctx) => {
+  const text = ctx.message.text.replace("/echo", "").trim();
+  if (!text) return ctx.reply("❌ من فضلك اكتب النص بعد الأمر. مثال:\n/echo مرحبا");
+  try {
+    const audioUrl = await vo.voice(text, "echo");
+    await ctx.replyWithAudio({ url: audioUrl }, { title: "echo.mp3" });
+  } catch (err) {
+    console.error("Voice error:", err);
+    await ctx.reply("❌ حدث خطأ أثناء توليد الصوت. يرجى المحاولة مرة أخرى.");
+  }
+});
+
+// تخزين الجدول
+let prayerTimes = {};
+let cairoTZ = "Africa/Cairo";
+
+// API مواقيت الصلاة
+async function fetchPrayerTimes(city = "Cairo") {
+  try {
+    const { data } = await axios.get(
+      `https://api.aladhan.com/v1/timingsByCity?city=${city}&country=Egypt&method=8`
+    );
+
+    prayerTimes = {
+      Fajr: data.data.timings.Fajr,
+      Dhuhr: data.data.timings.Dhuhr,
+      Asr: data.data.timings.Asr,
+      Maghrib: data.data.timings.Maghrib,
+      Isha: data.data.timings.Isha,
+    };
+
+    await createPrayerImage(prayerTimes, city);
+    console.log("✅ Prayer times updated", prayerTimes);
+  } catch (err) {
+    console.error("❌ Error fetching prayer times:", err.message);
+  }
+}
+
+// إنشاء صورة بمواقيت الصلاة
+async function createPrayerImage(times, city) {
+  const image = await Jimp.read(
+    "https://telegra.ph/file/8e791e4a13e80881584dc.jpg"
+  );
+  const fontWhite = await Jimp.loadFont(Jimp.FONT_SANS_64_WHITE);
+  const fontBlack = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK);
+
+  image.print(fontWhite, 550, 223, times.Fajr);
+  image.print(fontWhite, 550, 321, times.Dhuhr);
+  image.print(fontWhite, 550, 392, times.Asr);
+  image.print(fontWhite, 550, 481, times.Maghrib);
+  image.print(fontWhite, 550, 571, times.Isha);
+
+  image.print(fontBlack, 870, 391, city);
+
+  await image.writeAsync("./prayer.png");
+}
+
+// التحقق كل دقيقة
+setInterval(async () => {
+  if (!prayerTimes.Fajr) return;
+
+  const date = new Date(
+    new Date().toLocaleString("en-US", { timeZone: cairoTZ })
+  );
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const now = `${hours.toString().padStart(2, "0")}:${minutes
+    .toString()
+    .padStart(2, "0")}`;
+
+  for (let [name, time] of Object.entries(prayerTimes)) {
+    if (time.startsWith(now)) {
+      await bot.telegram.sendAudio(
+        CHAT_ID, // << حط الايدي بتاع الجروب او الشخص هنا
+        { url: "https://media.vocaroo.com/mp3/1ofLT2YUJAjQ" },
+        {
+          caption: `🕌 حان الآن وقت صلاة ${name}\n🕑 ${time}`,
+          parse_mode: "Markdown",
+        }
+      );
+      await bot.telegram.sendPhoto(CHAT_ID, { source: "./w.png" });
+    }
+  }
+}, 60 * 1000);
+
+// أمر يدوي لعرض المواقيت
+
+
+// fable
+bot.command("fable", async (ctx) => {
+  const text = ctx.message.text.replace("/fable", "").trim();
+  if (!text) return ctx.reply("❌ من فضلك اكتب النص بعد الأمر. مثال:\n/fable مرحبا");
+  try {
+    const audioUrl = await vo.voice(text, "fable");
+    await ctx.replyWithAudio({ url: audioUrl }, { title: "fable.mp3" });
+  } catch (err) {
+    console.error("Voice error:", err);
+    await ctx.reply("❌ حدث خطأ أثناء توليد الصوت. يرجى المحاولة مرة أخرى.");
+  }
+});
+
+// onyx
+bot.command("onyx", async (ctx) => {
+  const text = ctx.message.text.replace("/onyx", "").trim();
+  if (!text) return ctx.reply("❌ من فضلك اكتب النص بعد الأمر. مثال:\n/onyx مرحبا");
+  try {
+    const audioUrl = await vo.voice(text, "onyx");
+    await ctx.replyWithAudio({ url: audioUrl }, { title: "onyx.mp3" });
+  } catch (err) {
+    console.error("Voice error:", err);
+    await ctx.reply("❌ حدث خطأ أثناء توليد الصوت. يرجى المحاولة مرة أخرى.");
+  }
+});
+
+// nova
+bot.command("nova", async (ctx) => {
+  const text = ctx.message.text.replace("/nova", "").trim();
+  if (!text) return ctx.reply("❌ من فضلك اكتب النص بعد الأمر. مثال:\n/nova مرحبا");
+  try {
+    const audioUrl = await vo.voice(text, "nova");
+    await ctx.replyWithAudio({ url: audioUrl }, { title: "nova.mp3" });
+  } catch (err) {
+    console.error("Voice error:", err);
+    await ctx.reply("❌ حدث خطأ أثناء توليد الصوت. يرجى المحاولة مرة أخرى.");
+  }
+});
+
+
+
+// أوامر
+bot.command(["my_msg", "رسائلي"], async (ctx) => {
+  const chatId = ctx.chat.id;
+  const userId = ctx.from.id;
+
+  if (!global.groupData[chatId] || !global.groupData[chatId][userId]) {
+    return ctx.reply("❌ لا توجد بيانات عن رسائلك حتى الآن.");
+  }
+
+  const messagesSent = global.groupData[chatId][userId].messagesSent;
+
+  let message = `🌷 إحـصـائـيـات رسـائـلـك\n\n`;
+  message += `🔥 الـمـجـمـوعـة: ${ctx.chat.title}\n`;
+  message += `🔥 الـمـسـتـخـدم: [${ctx.from.first_name}](tg://user?id=${userId})\n`;
+  message += `🔥 عـدد الـرسـائـل: ${messagesSent} رسـالـة\n`;
+
+  ctx.replyWithMarkdown(message);
+});
+
+bot.command("total", async (ctx) => {
+  const chatId = ctx.chat.id;
+
+  if (!global.groupData[chatId]) {
+    return ctx.reply("❌ لا توجد بيانات عن هذه المجموعة حتى الآن.");
+  }
+
+  const groupUsers = global.groupData[chatId];
+  const sortedUsers = Object.entries(groupUsers).sort(
+    (a, b) => b[1].messagesSent - a[1].messagesSent
+  );
+
+  const totalMessages = sortedUsers.reduce(
+    (sum, user) => sum + user[1].messagesSent,
+    0
+  );
+  const totalMembers = await ctx.getChatMembersCount();
+
+  let resultMessage = `🌷 إحـصـائـيـات الـرسـائـل داخـل الـمـجـمـوعـة 🌷\n\n`;
+  resultMessage += `🔥 الـمـجـمـوعـة: ${ctx.chat.title}\n`;
+  resultMessage += `🔥 عـدد الأعـضـاء: ${totalMembers}\n`;
+  resultMessage += `🔥 إجـمـالـي الـرسـائـل: ${totalMessages} رسالة\n\n`;
+
+  if (sortedUsers.length > 0) {
+    const king = sortedUsers[0];
+    resultMessage += `🌷 مـلـك الـتـفـاعـل! \n`;
+    resultMessage += `✨ [User](tg://user?id=${king[0]}) - ${king[1].messagesSent} رسـالـة 🌷\n\n`;
+  }
+
+  resultMessage += `🔥 دتـفـاصـيـل الـرسـائـل حـسـب الـأعـضـاء: 🌷\n`;
+  sortedUsers.forEach(([user, data], index) => {
+    const userMention = `[User](tg://user?id=${user})`;
+    resultMessage += `${index + 1}. ${userMention} - ${data.messagesSent} رسـالـة\n`;
+    resultMessage += `━━━━━━━━━━━━━━━━━━━━\n`;
+  });
+
+  ctx.replyWithMarkdown(resultMessage);
+});
+
+// shimmer
+bot.command("shimmer", async (ctx) => {
+  const text = ctx.message.text.replace("/shimmer", "").trim();
+  if (!text) return ctx.reply("❌ من فضلك اكتب النص بعد الأمر. مثال:\n/shimmer مرحبا");
+  try {
+    const audioUrl = await vo.voice(text, "shimmer");
+    await ctx.replyWithAudio({ url: audioUrl }, { title: "shimmer.mp3" });
+  } catch (err) {
+    console.error("Voice error:", err);
+    await ctx.reply("❌ حدث خطأ أثناء توليد الصوت. يرجى المحاولة مرة أخرى.");
+  }
+});
+
+// coral
+bot.command("coral", async (ctx) => {
+  const text = ctx.message.text.replace("/coral", "").trim();
+  if (!text) return ctx.reply("❌ من فضلك اكتب النص بعد الأمر. مثال:\n/coral مرحبا");
+  try {
+    const audioUrl = await vo.voice(text, "coral");
+    await ctx.replyWithAudio({ url: audioUrl }, { title: "coral.mp3" });
+  } catch (err) {
+    console.error("Voice error:", err);
+    await ctx.reply("❌ حدث خطأ أثناء توليد الصوت. يرجى المحاولة مرة أخرى.");
+  }
+});
+
+// verse
+bot.command("verse", async (ctx) => {
+  const text = ctx.message.text.replace("/verse", "").trim();
+  if (!text) return ctx.reply("❌ من فضلك اكتب النص بعد الأمر. مثال:\n/verse مرحبا");
+  try {
+    const audioUrl = await vo.voice(text, "verse");
+    await ctx.replyWithAudio({ url: audioUrl }, { title: "verse.mp3" });
+  } catch (err) {
+    console.error("Voice error:", err);
+    await ctx.reply("❌ حدث خطأ أثناء توليد الصوت. يرجى المحاولة مرة أخرى.");
+  }
+});
+
+
+// مصفوفة الصور
+const p = [
+  'https://telegra.ph/file/0b4edfff71de7f421736b.jpg', 
+  'https://telegra.ph/file/966e5a75adcf3038d2117.jpg',     
+  'https://telegra.ph/file/129cf324be09328bde328.jpg', 
+  'https://telegra.ph/file/1ba93e9e0d969b6ea645c.jpg',     
+  'https://telegra.ph/file/a76e59689727873121251.jpg', 
+  'https://telegra.ph/file/dc9d31300e8714770b3a8.jpg', 
+  'https://telegra.ph/file/fc5b11c266fe9b906253b.jpg', 
+  'https://telegra.ph/file/fa89bc4eff660c0a2a715.jpg', 
+  'https://telegra.ph/file/b45f2556309e6fa341b62.jpg', 
+  'https://telegra.ph/file/f6544a989885590ed653c.jpg', 
+  'https://telegra.ph/file/2d6ae1007a4a5fc0dc38b.jpg', 
+  'https://telegra.ph/file/cffd6599039759d29df15.jpg', 
+  'https://telegra.ph/file/58397881dace03ce7e7de.jpg', 
+  'https://telegra.ph/file/8ad3c7e4b606536e6256d.jpg', 
+  'https://telegra.ph/file/545bb8656b828f0248617.jpg', 
+  'https://telegra.ph/file/eaeac375c6377b459eb55.jpg', 
+  'https://telegra.ph/file/41cd9ffae9e40b8ce36a7.jpg', 
+  'https://telegra.ph/file/2fbb2eba2db74876ec289.jpg', 
+  'https://telegra.ph/file/8bea1ca85dee6f0ba788b.jpg', 
+  'https://telegra.ph/file/41cd9ffae9e40b8ce36a7.jpg', 
+  'https://telegra.ph/file/1c728549ef79e7974458d.jpg', 
+  'https://telegra.ph/file/1c728549ef79e7974458d.jpg', 
+  'https://telegra.ph/file/adfd607d2aaa459504872.jpg', 
+  'https://telegra.ph/file/c95e72f6b703e04d9573b.jpg', 
+  'https://telegra.ph/file/1b68f1ee280ac79575325.jpg', 
+  'https://telegra.ph/file/cd125e9978540758943f1.jpg', 
+  'https://telegra.ph/file/cd125e9978540758943f1.jpg', 
+  'https://telegra.ph/file/0fd432892427ff46191b1.jpg', 
+  'https://telegra.ph/file/2b6ed24f87092d1e6900c.jpg', 
+  'https://telegra.ph/file/2b6ed24f87092d1e6900c.jpg', 
+  'https://telegra.ph/file/f2a4e534db1f22af8ce2c.jpg', 
+  'https://telegra.ph/file/3d6d1f51138ad750577ed.jpg', 
+  'https://telegra.ph/file/61799c54946579bfa08a1.jpg', 
+  'https://telegra.ph/file/1afc70ea404504d2f5994.jpg',
+  'https://telegra.ph/file/2ce9d4eb31577da9f1525.jpg',
+  'https://telegra.ph/file/9c732155bf4e6a2308bcc.jpg',
+  'https://telegra.ph/file/3cc38e940f156c3746d7d.jpg',
+  'https://telegra.ph/file/dc5e2740d8248144bc996.jpg',
+  'https://telegra.ph/file/b3b9565430764ae00a2d8.jpg',
+  'https://telegra.ph/file/8fee44c2ee4130e35aa4d.jpg',
+  'https://telegra.ph/file/9a8657130d89d8b118714.jpg',     
+  'https://telegra.ph/file/2d1a2180234953c6dc622.jpg', 
+  'https://telegra.ph/file/fc039b7423a3b27d0bddd.jpg', 
+  'https://telegra.ph/file/7dccd99036b926b14fcc6.jpg', 
+  'https://telegra.ph/file/c0e74a9a6f7498e7e931c.jpg', 
+  'https://telegra.ph/file/2e8f8c310d98d4cc35307.jpg', 
+  'https://telegra.ph/file/a8a16e0678ff4d1d3b2e5.jpg', 
+  'https://telegra.ph/file/d960b628d8bf86248a0ce.jpg', 
+  'https://telegra.ph/file/d960b628d8bf86248a0ce.jpg', 
+  'https://telegra.ph/file/4d06e2f75f512c584bb26.jpg', 
+  'https://telegra.ph/file/6c3400b471e6797fd9f12.jpg', 
+  'https://telegra.ph/file/a861285da4b31a51b9250.jpg', 
+  'https://telegra.ph/file/c324633c18ad44955db12.jpg', 
+  'https://telegra.ph/file/00c745531c05693a713fa.jpg', 
+  'https://telegra.ph/file/77df02f5227a5bab6091d.jpg', 
+  'https://telegra.ph/file/01960a18a9bd6b1a55d01.jpg', 
+  'https://telegra.ph/file/c3b0fc047f232acfe6cc8.jpg', 
+  'https://telegra.ph/file/5e82362b93b0bd30eceee.jpg', 
+  'https://telegra.ph/file/0f8cfef83b256d8f20fa6.jpg', 
+  'https://telegra.ph/file/f2b81fcced4b3e6c74efc.jpg', 
+  'https://telegra.ph/file/7a2feb1fc3219802f8c16.jpg', 
+  'https://telegra.ph/file/1b0f08ca14c593b531ee5.jpg', 
+  'https://telegra.ph/file/13ad84060675b1d63f9a5.jpg', 
+  'https://telegra.ph/file/2bf5dd82da40be37fe23e.jpg', 
+  'https://telegra.ph/file/35887f0b62af93bd1209c.jpg', 
+  'https://telegra.ph/file/47202d8641c9062df29e4.jpg', 
+  'https://telegra.ph/file/1da3bbc0d089c837ce977.jpg', 
+  'https://telegra.ph/file/41202fccf9541aae90522.jpg', 
+  'https://telegra.ph/file/67cca40d8e37f67af1514.jpg', 
+  'https://telegra.ph/file/67cca40d8e37f67af1514.jpg', 
+  'https://telegra.ph/file/e4d770e74bea737d93a7d.jpg',
+  'https://telegra.ph/file/7c3fc3534e42995525a81.jpg',
+  'https://telegra.ph/file/7f9daca6edf0ed3279a81.jpg',
+  'https://telegra.ph/file/8e42d965afb9bab2c1b2d.jpg',
+  'https://telegra.ph/file/bee606c7ceeca46a6d7d6.jpg',
+  'https://telegra.ph/file/7f9daca6edf0ed3279a81.jpg',
+  'https://telegra.ph/file/ee7d6171e234869534231.jpg',
+  'https://telegra.ph/file/9ea5e1a33f20aa39f856a.jpg',
+  'https://telegra.ph/file/5ec51f907d0cfeb066a9f.jpg',
+  'https://telegra.ph/file/ffb9f5c6438ac3278f221.jpg',
+  'https://telegra.ph/file/7f9daca6edf0ed3279a81.jpg', 
+];
+bot.command(["dado", "anime"], async (ctx) => {
+  const randomImg = p[Math.floor(Math.random() * p.length)];
+  await ctx.replyWithPhoto(
+    { url: randomImg },
+    {
+      caption: "⎔↞┃خـلفـيات انـمـي مـنـوعه 🔖┃",
+    }
+  );
+});
+
+// ballad
+bot.command("ballad", async (ctx) => {
+  const text = ctx.message.text.replace("/ballad", "").trim();
+  if (!text) return ctx.reply("❌ من فضلك اكتب النص بعد الأمر. مثال:\n/ballad مرحبا");
+  try {
+    const audioUrl = await vo.voice(text, "ballad");
+    await ctx.replyWithAudio({ url: audioUrl }, { title: "ballad.mp3" });
+  } catch (err) {
+    console.error("Voice error:", err);
+    await ctx.reply("❌ حدث خطأ أثناء توليد الصوت. يرجى المحاولة مرة أخرى.");
+  }
+});
+
+// ash
+bot.command("ash", async (ctx) => {
+  const text = ctx.message.text.replace("/ash", "").trim();
+  if (!text) return ctx.reply("❌ من فضلك اكتب النص بعد الأمر. مثال:\n/ash مرحبا");
+  try {
+    const audioUrl = await vo.voice(text, "ash");
+    await ctx.replyWithAudio({ url: audioUrl }, { title: "ash.mp3" });
+  } catch (err) {
+    console.error("Voice error:", err);
+    await ctx.reply("❌ حدث خطأ أثناء توليد الصوت. يرجى المحاولة مرة أخرى.");
+  }
+});
+
+// sage
+bot.command("sage", async (ctx) => {
+  const text = ctx.message.text.replace("/sage", "").trim();
+  if (!text) return ctx.reply("❌ من فضلك اكتب النص بعد الأمر. مثال:\n/sage مرحبا");
+  try {
+    const audioUrl = await vo.voice(text, "sage");
+    await ctx.replyWithAudio({ url: audioUrl }, { title: "sage.mp3" });
+  } catch (err) {
+    console.error("Voice error:", err);
+    await ctx.reply("❌ حدث خطأ أثناء توليد الصوت. يرجى المحاولة مرة أخرى.");
+  }
+});
+
+// amuch
+bot.command("amuch", async (ctx) => {
+  const text = ctx.message.text.replace("/amuch", "").trim();
+  if (!text) return ctx.reply("❌ من فضلك اكتب النص بعد الأمر. مثال:\n/amuch مرحبا");
+  try {
+    const audioUrl = await vo.voice(text, "amuch");
+    await ctx.replyWithAudio({ url: audioUrl }, { title: "amuch.mp3" });
+  } catch (err) {
+    console.error("Voice error:", err);
+    await ctx.reply("❌ حدث خطأ أثناء توليد الصوت. يرجى المحاولة مرة أخرى.");
+  }
+});
+
+// aster
+bot.command("aster", async (ctx) => {
+  const text = ctx.message.text.replace("/aster", "").trim();
+  if (!text) return ctx.reply("❌ من فضلك اكتب النص بعد الأمر. مثال:\n/aster مرحبا");
+  try {
+    const audioUrl = await vo.voice(text, "aster");
+    await ctx.replyWithAudio({ url: audioUrl }, { title: "aster.mp3" });
+  } catch (err) {
+    console.error("Voice error:", err);
+    await ctx.reply("❌ حدث خطأ أثناء توليد الصوت. يرجى المحاولة مرة أخرى.");
+  }
+});
+
+// brook
+bot.command("brook", async (ctx) => {
+  const text = ctx.message.text.replace("/brook", "").trim();
+  if (!text) return ctx.reply("❌ من فضلك اكتب النص بعد الأمر. مثال:\n/brook مرحبا");
+  try {
+    const audioUrl = await vo.voice(text, "brook");
+    await ctx.replyWithAudio({ url: audioUrl }, { title: "brook.mp3" });
+  } catch (err) {
+    console.error("Voice error:", err);
+    await ctx.reply("❌ حدث خطأ أثناء توليد الصوت. يرجى المحاولة مرة أخرى.");
+  }
+});
+
+// clover
+bot.command("clover", async (ctx) => {
+  const text = ctx.message.text.replace("/clover", "").trim();
+  if (!text) return ctx.reply("❌ من فضلك اكتب النص بعد الأمر. مثال:\n/clover مرحبا");
+  try {
+    const audioUrl = await vo.voice(text, "clover");
+    await ctx.replyWithAudio({ url: audioUrl }, { title: "clover.mp3" });
+  } catch (err) {
+    console.error("Voice error:", err);
+    await ctx.reply("❌ حدث خطأ أثناء توليد الصوت. يرجى المحاولة مرة أخرى.");
+  }
+});
+
+// dan
+bot.command("dan", async (ctx) => {
+  const text = ctx.message.text.replace("/dan", "").trim();
+  if (!text) return ctx.reply("❌ من فضلك اكتب النص بعد الأمر. مثال:\n/dan مرحبا");
+  try {
+    const audioUrl = await vo.voice(text, "dan");
+    await ctx.replyWithAudio({ url: audioUrl }, { title: "dan.mp3" });
+  } catch (err) {
+    console.error("Voice error:", err);
+    await ctx.reply("❌ حدث خطأ أثناء توليد الصوت. يرجى المحاولة مرة أخرى.");
+  }
+});
+
+// elan
+bot.command("elan", async (ctx) => {
+  const text = ctx.message.text.replace("/elan", "").trim();
+  if (!text) return ctx.reply("❌ من فضلك اكتب النص بعد الأمر. مثال:\n/elan مرحبا");
+  try {
+    const audioUrl = await vo.voice(text, "elan");
+    await ctx.replyWithAudio({ url: audioUrl }, { title: "elan.mp3" });
+  } catch (err) {
+    console.error("Voice error:", err);
+    await ctx.reply("❌ حدث خطأ أثناء توليد الصوت. يرجى المحاولة مرة أخرى.");
+  }
+});
+// الموديلات
+const chatModels = {
+  gpt: {
+    name: "openai",
+    description: "🎯 GPT-4o-mini | (موديل أساسي)",
+    command: "gpt",
+    emoji: "🤖"
+  },
+  gpt4: {
+    name: "openai-large",
+    description: "🚀 GPT-4o | (موديل متقدم)",
+    command: "gpt_pro",
+    emoji: "🧠"
+  },
+  o1: {
+    name: "openai-reasoning",
+    description: "🧩 o1-mini | (متخصص في المنطق)",
+    command: "ai_1",
+    emoji: "🧮"
+  },
+  o3: {
+    name: "openai-reasoning",
+    description: "🔬 o3-mini | (رؤية ومنطق)",
+    command: "ai_pro",
+    emoji: "🧿"
+  },
+  llama: {
+    name: "llama",
+    description: "🦙 Llama 3.3 | (مفتوح المصدر)",
+    command: "lima",
+    emoji: "🌿"
+  },
+  mistral: {
+    name: "mistral",
+    description: "🍷 Mistral Nemo | (فرنسي)",
+    command: "franso",
+    emoji: "🇫🇷"
+  },
+  claude: {
+    name: "claude",
+    description: "🎩 Claude 3.5 Haiku",
+    command: "claude",
+    emoji: "📜"
+  },
+  gemini: {
+    name: "gemini",
+    description: "💠 Gemini Flash | (من جوجل)",
+    command: "gemini",
+    emoji: "⚡"
+  },
+  deepseek: {
+    name: "deepseek",
+    description: "🌌 DeepSeek-V3",
+    command: "deepseek",
+    emoji: "🔍"
+  },
+  phi: {
+    name: "phi",
+    description: "📡 Phi-4 | (من مايكروسوفت)",
+    command: "phi",
+    emoji: "🪐"
+  }
+};
+
+// API Pollinations
+const pollinations = {
+  api: {
+    chat: "https://text.pollinations.ai",
+  },
+  header: {
+    'Connection': 'keep-alive',
+    'User-Agent': 'Mozilla/5.0',
+    'Accept': '*/*'
+  }
+};
+
+// دالة الاتصال بالـ API
+async function chatWithPollinations(model, question) {
+  try {
+    const res = await axios.get(`${pollinations.api.chat}/${encodeURIComponent(question)}`, {
+      params: { model },
+      headers: pollinations.header,
+      timeout: 15000,
+    });
+    return res.data;
+  } catch (e) {
+    if (e.code === 'ECONNABORTED') throw new Error("⏱ الخادم تأخر بالرد.");
+    throw new Error(`❌ خطأ: ${e.message}`);
+  }
+}
+
+// أمر /start لعرض قائمة الأوامر
+bot.start((ctx) => {
+  let helpMessage = `🤖 أوامر الذكاء الاصطناعي \n\n`;
+  for (const key in chatModels) {
+    const model = chatModels[key];
+    helpMessage += `${model.emoji} ${model.description}\n`;
+    helpMessage += `   ┗ /${model.command} <سؤالك>\n\n`;
+  }
+  ctx.reply(helpMessage, { parse_mode: "Markdown" });
+});
+
+// إنشاء أوامر ديناميكية لكل موديل
+for (const key in chatModels) {
+  const model = chatModels[key];
+
+  bot.command(model.command, async (ctx) => {
+    const question = ctx.message.text.replace(`/${model.command}`, "").trim();
+
+    if (!question) {
+      return ctx.reply(`❌ اكتب سؤالك بعد الأمر.\n🌷 مثال: /${model.command} ما هو الذكاء الاصطناعي؟`);
+    }
+
+    const waitMsg = await ctx.reply(`🌷 جاري المعالجة باستخدام ${model.description}...`, { parse_mode: "Markdown" });
+
+    try {
+      const answer = await chatWithPollinations(model.name, question);
+
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        waitMsg.message_id,
+        null,
+        `${model.emoji} ${model.description}\n\n${answer}`,
+        { parse_mode: "Markdown" }
+      );
+
+    } catch (error) {
+      ctx.reply(`❌ خطأ: ${error.message}`);
+    }
+  });
+}
+
+//==========
+
+bot.command(["apk2", "dapk2"], async (ctx) => {
+  const args = ctx.message.text.split(" ").slice(1);
+  if (!args[0]) {
+    return ctx.reply(
+      `⌯︙يرجى كتابة اسم التطبيق الذي تريد تحميله.\n⌯︙مثال: /apk2 كلاش رويال`
+    );
+  }
+
+  await ctx.reply(`⌯︙جارٍ البحث عن التطبيق...\n⌯︙يرجى الانتظار قليلًا 🔍`);
+
+  try {
+    let res = await axios.get(
+      `https://api.dorratz.com/v2/apk-dl?text=${args.join(" ")}`,
+      {
+        maxContentLength: 50 * 1024 * 1024,
+        maxBodyLength: 50 * 1024 * 1024,
+      }
+    );
+
+    let result = res.data;
+    if (!result?.dllink) {
+      return ctx.reply("⌯︙عذرًا، لم يتم العثور على أي تطبيق بهذا الاسم ❌");
+    }
+
+    let { name, size, lastUpdate, icon, dllink } = result;
+
+    let texto = `⌯︙جارٍ تحميل التطبيق... يرجى الانتظار 📦
+⌯︙الاسم: ${name}
+⌯︙الحجم: ${size}
+⌯︙آخر تحديث: ${lastUpdate}
+
+> ✦┇𝐌𝐈𝐊𝐄𝐘 |♕| 𝐁𝐎𝐓┇✦`;
+
+    // صورة التطبيق لو موجودة
+    if (icon) {
+      await ctx.replyWithPhoto({ url: icon }, { caption: texto });
+    } else {
+      await ctx.reply(texto);
+    }
+
+    // ملف APK
+    await ctx.replyWithDocument(
+      { url: dllink, filename: `${name}.apk` },
+      {
+        caption: `⌯︙تم استخراج رابط التحميل بنجاح 🌷\n> ✦┇𝐌𝐈𝐊𝐄𝐘 |♕| 𝐁𝐎𝐓┇✦`,
+      }
+    );
+  } catch (err) {
+    console.error(err);
+    ctx.reply("❌ حدث خطأ أثناء البحث أو التحميل، حاول لاحقًا.");
+  }
+});
+bot.command(['happymod'], async (ctx) => {
+  const text = ctx.message.text.split(' ').slice(1).join(' ');
+  if (!text) return ctx.reply('❗ من فضلك أدخل اسم التطبيق الذي تريد البحث عنه في HappyMod.');
+
+  await ctx.reply('🌷 جارٍ البحث عن التطبيق في HappyMod...');
+
+  try {
+    const searchUrl = `https://happymod.com/search.html?q=${encodeURIComponent(text)}`;
+    const res = await fetch(searchUrl);
+    const html = await res.text();
+    const $ = cheerio.load(html);
+
+    const result = $('.pdt-app-box').first();
+    if (!result.length) return ctx.reply('ط❌ لم يتم العثور على نتائج.');
+
+    const appLink = result.find('a').attr('href');
+    if (!appLink) return ctx.reply('د❌ تعذر العثور على رابط التطبيق.');
+
+    const pageUrl = appLink.startsWith('http') ? appLink : `https://happymod.com${appLink}`;
+    await fetchAppInfo(pageUrl, ctx);
+
+  } catch (e) {
+    console.error(e);
+    ctx.reply('❌ حدث خطأ أثناء جلب بيانات التطبيق من HappyMod.');
+  }
+});
+
+async function fetchAppInfo(url, ctx) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+
+    const html = await res.text();
+    const $ = cheerio.load(html);
+
+    const title = $('h1').first().text().trim() || 'غير معروف';
+    const update = $('.app-box p').first().text().trim() || 'غير معروف';
+
+    const rows = $('table.pdt-table tr');
+    let version = '', date = '', size = '', rating = '', system = '', modInfo = '', developer = '', category = '', playUrl = '';
+
+    rows.each((_, el) => {
+      const key = $(el).find('td').first().text().trim().toLowerCase();
+      const val = $(el).find('td').last().text().trim();
+
+      if (key.includes('version')) version = val;
+      else if (key.includes('update') || key.includes('date')) date = val;
+      else if (key.includes('size')) size = val;
+      else if (key.includes('rating')) rating = val;
+      else if (key.includes('system') || key.includes('os')) system = val;
+      else if (key.includes('mod info') || key.includes('mod features')) modInfo = val;
+      else if (key.includes('developer') || key.includes('publisher')) developer = val;
+      else if (key.includes('category')) category = val;
+      else if (key.includes('google play') || key.includes('get it on')) {
+        playUrl = $(el).find('a').attr('href') || 'غير متوفر';
+      }
+    });
+
+    let apkLink = '';
+    $('.download-btn').each((_, el) => {
+      const btnText = $(el).text().toLowerCase();
+      if (btnText.includes('download') && btnText.includes('apk')) {
+        apkLink = $(el).attr('href');
+        return false;
+      }
+    });
+
+    if (apkLink) {
+      apkLink = apkLink.startsWith('http') ? apkLink :
+        apkLink.startsWith('./') ? `https://happymod.com${apkLink.replace('./', '/')}` :
+          `https://happymod.com${apkLink}`;
+    } else {
+      apkLink = 'غير متوفر';
+    }
+
+    let icon = $('.top_info img').attr('src') ||
+      $('.app-icon img').attr('src') ||
+      $('.app-box img').first().attr('src');
+
+    if (icon && !icon.startsWith('http')) {
+      icon = `https://happymod.com${icon.startsWith('/') ? icon : `/${icon}`}`;
+    }
+
+    const caption = `〔 HappyMod 〕
+🎮 الاسم: ${title}
+🆚 الإصدار: ${version || 'غير معروف'}
+📦 الحجم: ${size || 'غير معروف'}
+⭐ التقييم: ${rating || 'غير متوفر'}
+⚙️ النظام: ${system || 'غير معروف'}
+🧰 معلومات المود: ${modInfo || 'غير متوفر'}
+🧑‍💻 المطور: ${developer || 'غير معروف'}
+📁 التصنيف:ط ${category || 'غير متوفر'}
+📆 آخر تحديث:ط ${date || update || 'غير معروف'}
+🔗 رابط Play: ${playUrl || 'غير متوفر'}
+⬇️ رابط التحميل: ${apkLink}
+╰───────────────╯`;
+
+    if (icon) {
+      try {
+        const resImg = await fetch(icon);
+        const buffer = await resImg.buffer();
+
+        const __dirname = path.dirname(fileURLToPath(import.meta.url));
+        const tempPath = path.join(__dirname, 'temp_icon.jpg');
+        fs.writeFileSync(tempPath, buffer);
+
+        await ctx.replyWithPhoto({ source: tempPath }, { caption });
+        fs.unlinkSync(tempPath);
+      } catch (err) {
+        console.warn('❗ فشل تحميل الصورة، سيتم إرسال النص فقط.');
+        await ctx.reply(caption);
+      }
+    } else {
+      await ctx.reply(caption);
+    }
+
+  } catch (e) {
+    console.error('Error in fetchAppInfo:', e);
+    ctx.reply('❌ حدث خطأ أثناء جلب تفاصيل التطبيق.');
+  }
+}
+// تشغيل البوت
+// ========== الدوال ==========
+async function saveweb2zip(url, options = {}) {
+  if (!url) throw new Error('يجب تقديم رابط الموقع');
+  url = url.startsWith('https://') ? url : `https://${url}`;
+
+  const { data } = await axios.post('https://copier.saveweb2zip.com/api/copySite', {
+    url,
+    renameAssets: options.renameAssets,
+    saveStructure: options.saveStructure,
+    alternativeAlgorithm: options.alternativeAlgorithm,
+    mobileVersion: options.mobileVersion
+  }, {
+    headers: {
+      'accept': '*/*',
+      'content-type': 'application/json',
+      'origin': 'https://saveweb2zip.com',
+      'referer': 'https://saveweb2zip.com/',
+      'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36'
+    }
+  });
+
+  while (true) {
+    const { data: process } = await axios.get(`https://copier.saveweb2zip.com/api/getStatus/${data.md5}`, {
+      headers: {
+        'accept': '*/*',
+        'content-type': 'application/json',
+        'origin': 'https://saveweb2zip.com',
+        'referer': 'https://saveweb2zip.com/',
+        'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36'
+      }
+    });
+
+    if (!process.isFinished) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      continue;
+    } else {
+      return {
+        url,
+        error: {
+          text: process.errorText,
+          code: process.errorCode
+        },
+        copiedFilesAmount: process.copiedFilesAmount,
+        downloadUrl: `https://copier.saveweb2zip.com/api/downloadArchive/${process.md5}`
+      };
+    }
+  }
+}
+// ============ تكمله ===============
+async function yta(link) {
+  const format = "mp3";
+  const apiBase = "https://media.savetube.me/api";
+  const apiCDN = "/random-cdn";
+  const apiInfo = "/v2/info";
+  const apiDownload = "/download";
+
+  const decryptData = async (enc) => {
+    try {
+      const key = Buffer.from('C5D58EF67A7584E4A29F6C35BBC4EB12', 'hex');
+      const data = Buffer.from(enc, 'base64');
+      const iv = data.slice(0, 16);
+      const content = data.slice(16);
+      const decipher = crypto.createDecipheriv('aes-128-cbc', key, iv);
+      let decrypted = decipher.update(content);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+      return JSON.parse(decrypted.toString());
+    } catch {
+      return null;
+    }
+  };
+
+  const request = async (endpoint, data = {}, method = 'post') => {
+    try {
+      const { data: response } = await axios({
+        method,
+        url: `${endpoint.startsWith('http') ? '' : apiBase}${endpoint}`,
+        data: method === 'post' ? data : undefined,
+        params: method === 'get' ? data : undefined,
+        headers: {
+          'accept': '*/*',
+          'content-type': 'application/json',
+          'origin': 'https://yt.savetube.me',
+          'referer': 'https://yt.savetube.me/',
+          'user-agent': 'Postify/1.0.0'
+        }
+      });
+      return { status: true, data: response };
+    } catch (error) {
+      return { status: false, error: error.message };
+    }
+  };
+
+  const youtubeID = link.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/))([a-zA-Z0-9_-]{11})/);
+  if (!youtubeID) return { status: false, error: "فشل في استخراج ID الفيديو." };
+
+  try {
+    const cdnRes = await request(apiCDN, {}, 'get');
+    if (!cdnRes.status) return cdnRes;
+    const cdn = cdnRes.data.cdn;
+    const infoRes = await request(`https://${cdn}${apiInfo}`, { url: `https://www.youtube.com/watch?v=${youtubeID[1]}` });
+    if (!infoRes.status) return infoRes;
+    const decrypted = await decryptData(infoRes.data.data);
+    if (!decrypted) return { status: false, error: "فشل في فك تشفير بيانات الفيديو." };
+
+    const downloadRes = await request(`https://${cdn}${apiDownload}`, { id: youtubeID[1], downloadType: 'audio', quality: '128', key: decrypted.key });
+    if (!downloadRes.status || !downloadRes.data.data.downloadUrl) return { status: false, error: "لم يتم العثور على رابط تنزيل صالح." };
+
+    return { status: true, result: { title: decrypted.title || "غير معروف", type: 'audio', format, download: downloadRes.data.data.downloadUrl } };
+  } catch (error) {
+    return { status: false, error: error.message };
+  }
+}
+// --- دالة flux ---
+async function flux(options) {
+  try {
+    options = {
+      prompt: options?.prompt,
+      seed: options?.seed || Math.floor(Math.random() * 2147483647) + 1,
+      random_seed: options?.random_seed ?? true,
+      width: options?.width ?? 512,
+      height: options?.height ?? 512,
+      steps: options?.steps ?? 8,
+    };
+
+    if (!options.prompt) return { status: false, message: "undefined reading prompt!" };
+
+    const session_hash = randomString(11);
+
+    const joinResponse = await fetch(
+      "https://black-forest-labs-flux-1-schnell.hf.space/queue/join",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          data: [
+            options.prompt,
+            options.seed,
+            options.random_seed,
+            options.width,
+            options.height,
+            options.steps,
+          ],
+          event_data: null,
+          fn_index: 2,
+          trigger_id: 5,
+          session_hash,
+        }),
+      }
+    );
+
+    if (!joinResponse.ok) throw new Error("Failed to join queue");
+
+    const dataResponse = await fetch(
+      `https://black-forest-labs-flux-1-schnell.hf.space/queue/data?session_hash=${session_hash}`
+    );
+
+    if (!dataResponse.ok) throw new Error("Failed to retrieve data");
+
+    const rawData = await dataResponse.text();
+    const lines = rawData.split("\n");
+    const jsonObjects = [];
+
+    for (let line of lines) {
+      if (line.startsWith("data: ")) {
+        try {
+          jsonObjects.push(JSON.parse(line.slice(6).trim()));
+        } catch (err) {
+          console.error("Failed to parse JSON from Flux API");
+        }
+      }
+    }
+
+    const result = jsonObjects.find((d) => d.msg === "process_completed") || {};
+    if (!result?.success) return { status: false, message: result };
+
+    const images = result.output.data
+      .filter((d) => typeof d === "object")
+      .map((d) => d.url);
+
+    return { status: true, data: { images } };
+  } catch (e) {
+    return { status: false, message: e.message };
+  }
+}
+
+// --- دالة توليد سلسلة عشوائية ---
+function randomString(length) {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let result = "";
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+// ======== الاعلام ===============
+
+bot.command("blur", async (ctx) => {
+  const chatId = ctx.chat.id;
+  const userId = ctx.message.reply_to_message
+    ? ctx.message.reply_to_message.from.id
+    : ctx.from.id;
+
+  try {
+    // صورة البروفايل
+    const photos = await ctx.telegram.getUserProfilePhotos(userId, { limit: 1 });
+    if (!photos.total_count) {
+      return ctx.reply("❌ مفيش صورة بروفايل عند العضو ده");
+    }
+
+    const fileId = photos.photos[0][0].file_id;
+    const file = await ctx.telegram.getFile(fileId);
+    const avatarUrl = `https://api.telegram.org/file/bot${bot.telegram.token}/${file.file_path}`;
+
+    // API بلور
+    const apiUrl = `https://some-random-api.com/canvas/blur?avatar=${encodeURIComponent(
+      avatarUrl
+    )}`;
+
+    // تحميل الصورة من الـ API
+    const res = await fetch(apiUrl);
+    const buffer = await res.buffer();
+
+    // إرسال النتيجة
+    await ctx.replyWithPhoto({ source: buffer }, {
+      caption: `⛧︙تـم ضـبـط الـصـورة بـتـأثيـر ☠️\n> 𝐓𝐄𝐑𝐁𝐎 𝐒𝐏𝐀𝐌 🌷`,
+      reply_to_message_id: ctx.message.message_id,
+    });
+  } catch (err) {
+    console.error(err);
+    ctx.reply("🌷 حصل خطأ أثناء المعالجة.");
+  }
+});
+
+bot.command('flix', async (ctx) => {
+  const text = ctx.message.text.split(' ').slice(1).join(' ');
+  if (!text) return ctx.reply(`• زي كده ي خال : /فلكس
+  [النص]`, { parse_mode: 'Markdown' });
+
+  await ctx.reply("🌷 الصبر ي خال، جاري إنشاء الصور...");
+
+  try {
+    const data = await flux({ prompt: text });
+
+    if (!data.status || !data.data.images.length) {
+      return ctx.reply("❌ لم يتم إنشاء أي صور، حاول مجددًا.");
+    }
+
+    for (let i of data.data.images) {
+      try {
+        await ctx.replyWithPhoto(i);
+      } catch (err) {
+        console.error("خطأ في إرسال الصورة:", err.message);
+      }
+    }
+  } catch (err) {
+    console.error("خطأ في Flux API:", err.message);
+    ctx.reply("❌ حدث خطأ أثناء إنشاء الصور، حاول لاحقًا.");
+  }
+});
+//==========
+bot.command('flag1', async (ctx) => {
+  try {
+    let message = ctx.message.reply_to_message || ctx.message;
+    if (!message.photo) return ctx.reply("⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔\nالمرجو عمل ريبليت على صورة تريد عمل عليها إطار الأردن\n⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔", { parse_mode: 'Markdown' });
+
+    const fileId = message.photo[message.photo.length - 1].file_id;
+    const fileLink = await ctx.telegram.getFileLink(fileId);
+    
+    // تحميل الصورة من الرابط كـ buffer
+    const response = await fetch(fileLink.href);
+    const buffer = await response.buffer();
+
+    let userImage = await Jimp.read(buffer);
+    let background = await Jimp.read("https://files.catbox.moe/eb7wk8.jpg");
+
+    let circleSize = Math.floor(Math.min(background.bitmap.width, background.bitmap.height) * 0.9);
+    userImage.cover(circleSize, circleSize);
+    userImage.circle();
+
+    let posX = Math.floor((background.bitmap.width - circleSize) / 2);
+    let posY = Math.floor((background.bitmap.height - circleSize) / 2);
+
+    background.composite(userImage, posX, posY);
+
+    const filePath = "./output_image_with_background.png";
+    await background.writeAsync(filePath);
+
+    await ctx.replyWithPhoto({ source: fs.readFileSync(filePath) }, {
+      caption: "⎔ ⋅ ───━ •﹝🕴️﹞• ━─── ⋅ \nᯓ 𝅧𝅦𝑲𝑨𝑰 𝑩𝑶𝑻˖𖥔\n⎔ ⋅ ───━ •﹝🔥﹞• ━─── ⋅ ⎔",
+      parse_mode: 'Markdown'
+    });
+
+    await fs.promises.unlink(filePath);
+
+  } catch (err) {
+    console.error(err);
+    ctx.reply("❌ حدث خطأ أثناء معالجة الصورة مع الخلفية.");
+  }
+});
+
+
+
+// ارسال لجروب
+
+
+bot.command('flag2', async (ctx) => {
+    try {
+        const photo = ctx.message.reply_to_message?.photo?.[ctx.message.reply_to_message.photo.length - 1];
+        if (!photo) return ctx.reply("⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔\nالمرجو عمل ريبليت على صورة تريد عمل عليها إطار السعوديه\n⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔");
+
+        ctx.reply("🌷 جاري معالجة الصورة...");
+
+        const fileLink = await ctx.telegram.getFileLink(photo.file_id);
+        const userImage = await Jimp.read(fileLink.href);
+        const background = await Jimp.read("https://files.catbox.moe/6xjh4c.png");
+
+        let circleSize = Math.floor(Math.min(background.bitmap.width, background.bitmap.height) * 0.9);
+        userImage.cover(circleSize, circleSize);
+        userImage.circle();
+
+        let posX = Math.floor((background.bitmap.width - circleSize) / 2);
+        let posY = Math.floor((background.bitmap.height - circleSize) / 2);
+
+        background.composite(userImage, posX, posY);
+
+        const filePath = "./output_sa.png";
+        await background.writeAsync(filePath);
+
+        await ctx.replyWithPhoto({ source: fs.createReadStream(filePath) }, { caption: "🇸🇦 إطار السعودية" });
+        await fs.promises.unlink(filePath);
+
+    } catch (err) {
+        console.error(err);
+        ctx.reply("❌ حدث خطأ أثناء معالجة الصورة.");
+    }
+});
+
+
+// أمر /owner
+bot.command("owner", async (ctx) => {
+  try {
+
+
+    // صورة
+    await ctx.replyWithPhoto(
+      { source: "./132787.jpg" },
+      {
+        caption: "Developer",
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            
+            [
+              { text: "⦕ ELGHUL ⦖", url: "https://t.me/WA_META" },
+              
+            ]
+          ]
+        }
+      }
+    );
+  } catch (err) {
+    console.error(err);
+    ctx.reply("حصل خطأ ⚠️");
+  }
+});
+
+bot.command('flag3', async (ctx) => {
+    try {
+        const photo = ctx.message.reply_to_message?.photo?.[ctx.message.reply_to_message.photo.length - 1];
+        if (!photo) return ctx.reply("⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔\nالمرجو عمل ريبليت على صورة تريد عمل عليها إطار المغرب\n⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔");
+
+        ctx.reply("🌷 جاري معالجة الصورة...");
+
+        const fileLink = await ctx.telegram.getFileLink(photo.file_id);
+        const userImage = await Jimp.read(fileLink.href);
+        const background = await Jimp.read("https://files.catbox.moe/l0893d.jpg");
+
+        let circleSize = Math.floor(Math.min(background.bitmap.width, background.bitmap.height) * 0.9);
+        userImage.cover(circleSize, circleSize);
+        userImage.circle();
+
+        let posX = Math.floor((background.bitmap.width - circleSize) / 2);
+        let posY = Math.floor((background.bitmap.height - circleSize) / 2);
+
+        background.composite(userImage, posX, posY);
+
+        const filePath = "./output_ma.png";
+        await background.writeAsync(filePath);
+
+        await ctx.replyWithPhoto({ source: fs.createReadStream(filePath) }, { caption: "🇲🇦 إطار المغرب" });
+        await fs.promises.unlink(filePath);
+
+    } catch (err) {
+        console.error(err);
+        ctx.reply("❌ حدث خطأ أثناء معالجة الصورة.");
+    }
+});
+
+    bot.command('flag4', async (ctx) => {
+  try {
+    let message = ctx.message.reply_to_message || ctx.message;
+    if (!message.photo) return ctx.reply("⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔\nالمرجو عمل ريبليت على صورة تريد عمل عليها إطار السودان\n⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔");
+
+    const fileId = message.photo[message.photo.length - 1].file_id;
+    const fileLink = await ctx.telegram.getFileLink(fileId);
+    const response = await fetch(fileLink.href);
+    const buffer = await response.buffer();
+
+    let userImage = await Jimp.read(buffer);
+    let background = await Jimp.read("https://files.catbox.moe/7afwwe.jpg");
+
+    let circleSize = Math.floor(Math.min(background.bitmap.width, background.bitmap.height) * 0.9);
+    userImage.cover(circleSize, circleSize);
+    userImage.circle();
+
+    let posX = Math.floor((background.bitmap.width - circleSize) / 2);
+    let posY = Math.floor((background.bitmap.height - circleSize) / 2);
+
+    background.composite(userImage, posX, posY);
+
+    const filePath = "./output_image_with_background.png";
+    await background.writeAsync(filePath);
+
+    await ctx.replyWithPhoto({ source: fs.readFileSync(filePath) });
+
+    await fs.promises.unlink(filePath);
+
+  } catch (err) {
+    console.error(err);
+    ctx.reply("❌ حدث خطأ أثناء معالجة الصورة مع الخلفية.");
+  }
+});
+bot.command('flag5', async (ctx) => {
+  try {
+    let message = ctx.message.reply_to_message || ctx.message;
+    if (!message.photo) return ctx.reply("⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔\nالمرجو عمل ريبليت على صورة تريد عمل عليها إطار الامارات\n⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔");
+
+    const fileId = message.photo[message.photo.length - 1].file_id;
+    const fileLink = await ctx.telegram.getFileLink(fileId);
+    const response = await fetch(fileLink.href);
+    const buffer = await response.buffer();
+
+    let userImage = await Jimp.read(buffer);
+    let background = await Jimp.read("https://files.catbox.moe/ipaq1h.jpg");
+
+    let circleSize = Math.floor(Math.min(background.bitmap.width, background.bitmap.height) * 0.9);
+    userImage.cover(circleSize, circleSize);
+    userImage.circle();
+
+    let posX = Math.floor((background.bitmap.width - circleSize) / 2);
+    let posY = Math.floor((background.bitmap.height - circleSize) / 2);
+
+    background.composite(userImage, posX, posY);
+
+    const filePath = "./output_image_with_background.png";
+    await background.writeAsync(filePath);
+
+    await ctx.replyWithPhoto({ source: fs.readFileSync(filePath) });
+
+    await fs.promises.unlink(filePath);
+
+  } catch (err) {
+    console.error(err);
+    ctx.reply("❌ حدث خطأ أثناء معالجة الصورة مع الخلفية.");
+  }
+});
+bot.command('flag6', async (ctx) => {
+  try {
+    let message = ctx.message.reply_to_message || ctx.message;
+    if (!message.photo) return ctx.reply("⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔\nالمرجو عمل ريبليت على صورة تريد عمل عليها إطار اليمين\n⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔");
+
+    const fileId = message.photo[message.photo.length - 1].file_id;
+    const fileLink = await ctx.telegram.getFileLink(fileId);
+    const response = await fetch(fileLink.href);
+    const buffer = await response.buffer();
+
+    let userImage = await Jimp.read(buffer);
+    let background = await Jimp.read("https://files.catbox.moe/mh6jtt.jpg");
+
+    let circleSize = Math.floor(Math.min(background.bitmap.width, background.bitmap.height) * 0.9);
+    userImage.cover(circleSize, circleSize);
+    userImage.circle();
+
+    let posX = Math.floor((background.bitmap.width - circleSize) / 2);
+    let posY = Math.floor((background.bitmap.height - circleSize) / 2);
+
+    background.composite(userImage, posX, posY);
+
+    const filePath = "./output_image_with_background.png";
+    await background.writeAsync(filePath);
+
+    await ctx.replyWithPhoto({ source: fs.readFileSync(filePath) });
+
+    await fs.promises.unlink(filePath);
+
+  } catch (err) {
+    console.error(err);
+    ctx.reply("❌ حدث خطأ أثناء معالجة الصورة مع الخلفية.");
+  }
+});
+bot.command('flag7', async (ctx) => {
+  try {
+    let message = ctx.message.reply_to_message || ctx.message;
+    if (!message.photo) 
+      return ctx.reply("⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔\nالمرجو عمل ريبليت على صورة تريد عمل عليها إطار سوريا \n⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔", { parse_mode: 'Markdown' });
+
+    const fileId = message.photo[message.photo.length - 1].file_id;
+    const fileLink = await ctx.telegram.getFileLink(fileId);
+    const response = await fetch(fileLink.href);
+    const buffer = await response.buffer();
+
+    let userImage = await Jimp.read(buffer);
+    let background = await Jimp.read("https://files.catbox.moe/iti79i.jpg");
+
+    let circleSize = Math.floor(Math.min(background.bitmap.width, background.bitmap.height) * 0.9);
+    userImage.cover(circleSize, circleSize);
+    userImage.circle();
+
+    let posX = Math.floor((background.bitmap.width - circleSize) / 2);
+    let posY = Math.floor((background.bitmap.height - circleSize) / 2);
+
+    background.composite(userImage, posX, posY);
+
+    const filePath = "./output_image_with_background.png";
+    await background.writeAsync(filePath);
+
+    await ctx.replyWithPhoto({ source: fs.readFileSync(filePath) }, {
+      caption: "⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔\nالمرجو عمل ريبليت على صورة تريد عمل عليها إطار \n⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔",
+      parse_mode: 'Markdown'
+    });
+
+    await fs.promises.unlink(filePath);
+
+  } catch (err) {
+    console.error(err);
+    ctx.reply("❌ حدث خطأ أثناء معالجة الصورة مع الخلفية.");
+  }
+});
+bot.command('flag8', async (ctx) => {
+  try {
+    let message = ctx.message.reply_to_message || ctx.message;
+    if (!message.photo) 
+      return ctx.reply("⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔\nالمرجو عمل ريبليت على صورة تريد عمل عليها إطار فلسطين \n⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔", { parse_mode: 'Markdown' });
+
+    const fileId = message.photo[message.photo.length - 1].file_id;
+    const fileLink = await ctx.telegram.getFileLink(fileId);
+    const response = await fetch(fileLink.href);
+    const buffer = await response.buffer();
+
+    let userImage = await Jimp.read(buffer);
+    let background = await Jimp.read("https://files.catbox.moe/786f2j.jpg");
+
+    let circleSize = Math.floor(Math.min(background.bitmap.width, background.bitmap.height) * 0.9);
+    userImage.cover(circleSize, circleSize);
+    userImage.circle();
+
+    let posX = Math.floor((background.bitmap.width - circleSize) / 2);
+    let posY = Math.floor((background.bitmap.height - circleSize) / 2);
+
+    background.composite(userImage, posX, posY);
+
+    const filePath = "./output_image_with_background.png";
+    await background.writeAsync(filePath);
+
+    await ctx.replyWithPhoto({ source: fs.readFileSync(filePath) }, {
+      caption: "⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔\nᯓ 𝅧𝅦𝑲𝑨𝑰 𝑩𝑶𝑻˖𖥔\n⎔ ⋅ ───━ •﹝🌷﹞ ━─── ⋅ ⎔",
+      parse_mode: 'Markdown'
+    });
+
+    await fs.promises.unlink(filePath);
+
+  } catch (err) {
+    console.error(err);
+    ctx.reply("❌ حدث خطأ أثناء معالجة الصورة مع الخلفية.");
+  }
+});
+bot.command('flag9', async (ctx) => {
+  try {
+    let message = ctx.message.reply_to_message || ctx.message;
+    if (!message.photo) 
+      return ctx.reply("⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔\nالمرجو عمل ريبليت على صورة تريد عمل عليها إطار مصر 🇪🇬\n⎔ ⋅ ───━ •﹝🌷﹞ ━─── ⋅ ⎔", { parse_mode: 'Markdown' });
+
+    const fileId = message.photo[message.photo.length - 1].file_id;
+    const fileLink = await ctx.telegram.getFileLink(fileId);
+    const response = await fetch(fileLink.href);
+    const buffer = await response.buffer();
+
+    let userImage = await Jimp.read(buffer);
+    let background = await Jimp.read("https://d.uguu.se/mpMvoTFB.jpg");
+
+    let circleSize = Math.floor(Math.min(background.bitmap.width, background.bitmap.height) * 0.9);
+    userImage.cover(circleSize, circleSize);
+    userImage.circle();
+
+    let posX = Math.floor((background.bitmap.width - circleSize) / 2);
+    let posY = Math.floor((background.bitmap.height - circleSize) / 2);
+
+    background.composite(userImage, posX, posY);
+
+    const filePath = "./output_image_with_background.png";
+    await background.writeAsync(filePath);
+
+    await ctx.replyWithPhoto({ source: fs.readFileSync(filePath) }, {
+      caption: "⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔\nالمرجو عمل ريبليت على صورة تريد عمل عليها إطار الأردن\n⎔ ⋅ ───━ •﹝🌷﹞• ━─── ⋅ ⎔",
+      parse_mode: 'Markdown'
+    });
+
+    await fs.promises.unlink(filePath);
+
+  } catch (err) {
+    console.error(err);
+    ctx.reply("❌ حدث خطأ أثناء معالجة الصورة مع الخلفية.");
+  }
+});
+//=============================
+
+bot.command(["report"], async (ctx) => {
+  const text = ctx.message.text.split(" ").slice(1).join(" ");
+
+  if (!text) {
+    return ctx.reply(
+      `🌷 اكتب الخطأ أو الأمر مع سبب المشكلة\n\nمثال: /تقرير اللاصق مش شغال`,
+      { parse_mode: "Markdown" }
+    );
+  }
+
+  if (text.length < 15) {
+    return ctx.reply(`🧚🏼‍♂️ 『 لازم علشان تقدر تبعت البلاغ تكون معدي ال15 حرف 』`);
+  }
+
+  if (text.length > 1000) {
+    return ctx.reply(`🧚🏼‍♂️ 『 الحد الأقصى هو 1000 حرف عشان تعمل التقرير 』`);
+  }
+
+  // نص البلاغ
+  let report = `┏╼╾╼⧼⧼⧼ 『 بلاغ جديد 』 ⧽⧽⧽╼╼╼┓
+╏• 『 المرسل 』: @${ctx.from.username || ctx.from.id}
+╏• 『 الرسالة 』: ${text}
+┗╼╼╼╼╼╼╼╼╼╼╼╼╼╼╼╼╼╼╼╼╼`;
+
+  // تأكيد للمستخدم
+  await ctx.reply(
+    `🧚🏼‍♂️ 『 تم إرسال البلاغ للمطور، هيتم مراجعته قريبًا، لو البلاغ مش حقيقي هيتجاهلوه 』`
+  );
+
+  // إرسال البلاغ ليك (المطور)
+  await bot.telegram.sendMessage(OWNER_ID, report, { parse_mode: "Markdown" });
+});
+//==============================
+
+bot.command("saf", async (ctx) => {
+  try {
+    // طلب الحسابات من API
+    const res = await fetch(
+      "https://the-end-api.vercel.app/home/sections/Tools/api/api/safeum/accounts?apikey=Emam-4k8j2d9f7x"
+    );
+
+    if (!res.ok) throw new Error("فشل الاتصال بالـ API");
+
+    const json = await res.json();
+
+    if (!json.status || !Array.isArray(json.accounts)) {
+      return ctx.reply("❌ فشل في جلب الحسابات.");
+    }
+
+    const list = json.accounts
+      .map((acc, i) => {
+        const [email, password] = acc.split(":");
+        return `${i + 1}. 📧 Email: ${email}\n🔑 Pass: ${password}`;
+      })
+      .join("\n\n");
+
+    const message = `SAFEUM ACCOUNTS\n📦 Total: ${json.count}\n🧾 Remaining: ${json.remaining}\n\n${list}`;
+
+    // معرف القناة
+    const channelId = "@spam1379"; // 🔴 غيره بالـ chat id أو يوزر القناة بتاعتك
+
+    // إرسال الرسالة للقناة
+    await ctx.telegram.sendMessage(channelId, message, { parse_mode: "Markdown" });
+
+    // رد للمستخدم
+    await ctx.reply("🌷 تم إرسال الحسابات إلى قناة SAFEUM.");
+  } catch (err) {
+    console.error("API Error:", err);
+    await ctx.reply("❌ حصل خطأ أثناء جلب الحسابات، جرب تاني.");
+  }
+});
+//=============
+	bot.command(['saveweb', 'web2zip', 'حفظ-موقع', 'ويب', 'عيي'], async (ctx) => {
+  const args = ctx.message.text.split(' ').slice(1);
+  const commandName = ctx.message.text.split(' ')[0].replace('/', '').toLowerCase();
+  const isArabicCommand = ['عيي','ويب','حفظ-موقع'].includes(commandName);
+
+  const usageMessage = `
+🧞 كيفية الاستخدام:
+▢ ${commandName} <رابط الموقع>
+▢ مثال: ${commandName} https://google.com
+`;
+
+  if (!args[0]) {
+    return ctx.reply(isArabicCommand 
+      ? `🌷 يجب إدخال رابط الموقع!\n\n${usageMessage}` 
+      : `🌷 Please enter a website URL first!\n\n${usageMessage}`
+    );
+  }
+
+  ctx.reply(isArabicCommand ? '🌷 جاري حفظ الموقع...' : '🌷 Saving website...');
+
+  try {
+    // استدعاء حفظ الموقع وطلبه كـ zip مباشر
+    const result = await saveweb2zip(args[0], {
+      format: "zip",            // ⚡ هنا نخلي الإخراج zip
+      renameAssets: true,
+      saveStructure: false,
+      alternativeAlgorithm: false,
+      mobileVersion: false
+    });
+
+    // ارسال الملف بصيغة zip
+    await ctx.replyWithDocument(
+      { url: result.downloadUrl, filename: "website.zip" },
+      {
+        caption: `🌷 تم حفظ الموقع وضغطه بنجاح!\n▢ الرابط: ${args[0]}\n▢ عدد الملفات: ${result.copiedFilesAmount}\n🌷 بواسطة اسبام بوت`,
+        parse_mode: "Markdown"
+      }
+    );
+
+  } catch (err) {
+    ctx.reply(isArabicCommand 
+      ? `❌ حدث خطأ أثناء حفظ الموقع!\n▢ التفاصيل: ${err.message}` 
+      : `❌ Failed to save the website!\n▢ Details: ${err.message}`
+    );
+  }
+});
+// =================== YouTube =====
+const headers = {
+  authority: "ttsave.app",
+  accept: "application/json, text/plain, */*",
+  origin: "https://ttsave.app",
+  referer: "https://ttsave.app/en",
+  "user-agent": "Postify/1.0.0",
+};
+
+const ttsave = {
+  submit: async function (url, referer) {
+    const headerx = { ...headers, referer };
+    const data = { query: url, language_id: "1" };
+    return axios.post("https://ttsave.app/download", data, { headers: headerx });
+  },
+
+  parse: function ($) {
+    const uniqueId = $("#unique-id").val();
+    const nickname = $("h2.font-extrabold").text();
+    const profilePic = $("img.rounded-full").attr("src");
+    const username = $("a.font-extrabold.text-blue-400").text();
+    const description = $("p.text-gray-600").text();
+
+    const dlink = {
+      nowm: $("a.w-full.text-white.font-bold").first().attr("href"),
+      wm: $("a.w-full.text-white.font-bold").eq(1).attr("href"),
+      audio: $("a[type='audio']").attr("href"),
+      profilePic: $("a[type='profile']").attr("href"),
+      cover: $("a[type='cover']").attr("href"),
+    };
+
+    const slides = $("a[type='slide']")
+      .map((i, el) => ({ number: i + 1, url: $(el).attr("href") }))
+      .get();
+
+    const songTitle = $(".flex.flex-row.items-center.justify-center.gap-1.mt-5")
+      .find("span.text-gray-500")
+      .text()
+      .trim();
+
+    return { uniqueId, nickname, profilePic, username, description, dlink, songTitle, slides };
+  },
+
+  video: async function (link) {
+    const response = await this.submit(link, "https://ttsave.app/en");
+    const $ = cheerio.load(response.data);
+    const result = this.parse($);
+
+    if (result.slides && result.slides.length > 0) return { type: "slide", ...result };
+    return { type: "video", ...result, videoInfo: { nowm: result.dlink.nowm, wm: result.dlink.wm }, audioUrl: result.dlink.audio };
+  },
+};
+
+// ---- دعم ttsave ----
+
+// ================ TikTok ===================
+bot.command('tiktok', async (ctx) => {
+  const text = ctx.message.text.split(' ').slice(1).join(' ');
+  if (!text) return ctx.reply(`❗ يرجى إدخال رابط تيك توك:\nمثال: /تيك https://vm.tiktok.com/ZM686Q4ER/`);
+
+  try {
+    const videoResult = await ttsave.video(text);
+    const { type, nickname, username, songTitle, description, videoInfo, slides, audioUrl } = videoResult;
+
+    let message = `
+🎵 العنوان: ${songTitle || "غير متوفر"}
+👤 الصانع: ${nickname || username || "غير معروف"}
+✏️ الوصف: ${description || "بدون وصف"}
+`.trim();
+
+    if (type === "slide") {
+      message += "\n📷 النوع: عرض شرائح (صور)";
+      await ctx.reply(message);
+
+      for (let slide of slides) {
+        await ctx.replyWithPhoto(slide.url, { caption: `Slide ${slide.number}` });
+      }
+    } else if (type === "video") {
+      message += "\n🎥 النوع: فيديو";
+      if (videoInfo.nowm) {
+        await ctx.replyWithVideo(videoInfo.nowm, {
+          caption: message,
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            [Markup.button.url('تحميل الصوت 🎧', audioUrl || videoInfo.nowm)]
+          ])
+        });
+      } else {
+        await ctx.reply("❗ فشل في جلب الفيديو بدون علامة مائية.");
+      }
+    }
+
+    if (audioUrl) {
+      await ctx.replyWithAudio(audioUrl);
+    }
+  } catch (error) {
+    console.error(error);
+    await ctx.reply("❗ حدث خطأ عند البحث عن الرابط. تأكد من صحة الرابط وحاول مرة أخرى.");
+  }
+});
+
+const replies = [
+  { regex: /^يروحي$/i, text: "❤️ قلب روحك يا عسل" },
+  { regex: /^صلي علي النبي|صلي ع النبي$/i, text: "🕌 عليه افضل الصلاة والسلام" },
+  { regex: /^عامل اي|ازيك|اخبارك|حالك$/i, text: "👌 تمام الحمد لله يا قلبي" },
+  { regex: /^انا مخنوق|مخنوق|مخنوقه$/i, text: "😢 تعالى احضنك وخلاص" },
+  { regex: /^بموت فيك$/i, text: "🥹 بعشقك موت" },
+  { regex: /^كلموني$/i, text: "😝 كلمك عفريت احنا مالنا" },
+  { regex: /^بدي اتجوزك|تتجوزني|اتجوزني$/i, text: "😍 موافق وبشده" },
+  { regex: /^محح|امواح$/i, text: "😘 بوسه مسكره" },
+  { regex: /^كوتي$/i, text: "🥰 موتي بوتي" },
+  { regex: /^وحشني|وحشتني$/i, text: "💕 اكتر يا روح قلبي" },
+  { regex: /^بحبك$/i, text: "❤️ وانا كمان بموت فيك" },
+  { regex: /^موتفيق$/i, text: "😹 بعشق التراب اللي بتمشي عليه" },
+  { regex: /^حرامي|سارق$/i, text: "🤦 انت عبيط ولا ايه؟ بتقول اي كلام" },
+  { regex: /^هاي|هالو|اهلا$/i, text: "👋 هاي يروحي" },
+  { regex: /^بوسه|هات بوسه$/i, text: "😘 اموااااح" },
+  { regex: /^حبني|حبوني$/i, text: "💖 بعشقك مش بحبك بس" },
+  { regex: /^بتعشقني$/i, text: "🥂 اوي كمان" },
+  { regex: /^بعشقك$/i, text: "🥂 بموت فيك/ي" },
+  { regex: /^متيجي|مشهتيجي$/i, text: "🐤 مشهروح" },
+  { regex: /^تصبح علي خير|تصبحوا علي خير$/i, text: "🌙 وانت من اهل الخير" },
+  { regex: /^صباحو|صباح$/i, text: " صباح النور 😚" },
+  { regex: /^ربنا يسمحك$/i, text: "انت خدت حسنات و هوا خد فطيزو بالجامد 😭😂" },
+  { regex: /^زحلان|زعلتني|زعلان|زعلانه|سحلانه$/i, text: "🙂 حقك عليا" },
+  { regex: /^حبق|بحب$/i, text: "🌚 بموت فيك" },
+  { regex: /^يغوتي$/i, text: "بحبك طيب🧚" },
+  // فلفله / شتايم زيادة
+  { regex: /^يا غبي|يا حمار|يا متناك|ي غبي|يغبي|ي حمار|يحمار|ب متناك|يمتناك$/i, text: "كسمك اوي اوي ولا نص نص" },
+  { regex: /^يا حمار$/i, text: "🫏 انت الحمار وانت القمر كمان" },
+  { regex: /^يا كلب$/i, text: "🐶 الكلب اوفي منك" },
+  { regex: /^يا ابن$/i, text: "🤐 قوم يلا مش ناقصين قلة ادب" },
+  { regex: /^يلعن ابوكم$/i, text: "😹 يلعن ابو اللي يزعلنا" },
+  { regex: /^يعرص$/i, text: "كنت بعرص انا علي امك ؟" },
+  { regex: /^فلفله$/i, text: "🌶️ النار مولعه يا فلفل" },
+  { regex: /^بوت$/i, text: "🤖 نعم يا حب" }
+];
+
+// هاندلر للرسائل
+bot.on("text", async (ctx) => {
+  const text = ctx.message.text;
+  for (const r of replies) {
+    if (r.regex.test(text)) {
+      return ctx.reply(r.text, { reply_to_message_id: ctx.message.message_id });
+    }
+  }
+});
+
+// =================== Instagram ==============
+
+// ريجكس للروابط (واتساب + تليجرام)
+const linkRegex = /(chat\.whatsapp\.com\/[0-9A-Za-z]{20,}|whatsapp\.com\/channel\/[0-9A-Za-z]{20,}|t\.me\/[A-Za-z0-9_]+|telegram\.me\/[A-Za-z0-9_]+)/i;
+
+// قاعدة بيانات تحذيرات
+let warns = {};
+
+bot.on("message", async (ctx) => {
+  const chatId = ctx.chat.id;
+  const userId = ctx.from.id;
+  const text = ctx.message.text || "";
+
+  // نتأكد انه جروب
+  if (ctx.chat.type !== "supergroup" && ctx.chat.type !== "group") return;
+
+  const isLink = linkRegex.exec(text);
+
+  if (isLink) {
+    try {
+      // جيب الادمنز
+      const admins = await ctx.getChatAdministrators();
+      const isAdmin = admins.some((a) => a.user.id === userId);
+
+      if (isAdmin) {
+        return ctx.reply("🌷 انت ادمن مش همسك الينك، بس أي حد تاني هيتمسح اللينك ويتحسبله تحذير");
+      }
+
+      if (!isAdmin) {
+        // زياده تحذير
+        warns[chatId] ||= {};
+        warns[chatId][userId] ||= 0;
+        warns[chatId][userId]++;
+
+        const warnCount = warns[chatId][userId];
+
+        // مسح الرسالة فورا
+        await ctx.deleteMessage(ctx.message.message_id);
+
+        // ارسال تحذير
+        await ctx.replyWithHTML(
+          `⬣━━━〘🥷 مانع الروابط 🌷〙━┏
+🌷┇ تم اكتشاف رابط
+❐⊹━━━━『SPAM』━━━⊹❐
+🌷┇ <a href="tg://user?id=${userId}">ممنوع يسطا</a>
+❐⊹━━━━『SPAM』━━━⊹❐
+🌷┇ تحذير رقم (${warnCount}/3)
+⬣━━━〘🥷 مانع الروابط 🌷〙━┗`
+        );
+
+        // لو وصل 3 تحذيرات → طرد
+        if (warnCount >= 3) {
+          await ctx.kickChatMember(userId);
+          warns[chatId][userId] = 0; // تصفير التحذيرات بعد الطرد
+        }
+      }
+    } catch (e) {
+      console.error("❌ خطأ في مانع الروابط:", e);
+    }
+  }
+});
+
+bot.on('message', async (ctx) => {
+  const text = ctx.message.text;
+  if (!text) return;
+
+  if (text.match(/(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|instagr\.am)\/[\w\-/?=]+/i)) {
+    try {
+      const encodedURL = encodeURIComponent(text.trim());
+      const apiUrl = `https://the-end-api.vercel.app/home/sections/Download/api/Instagram/ajax?url=${encodedURL}`;
+      const response = await axios.get(apiUrl);
+      const downloadUrl = response.data.data?.[1]?.url;
+      if (!downloadUrl) return ctx.reply('🌷 لم يتم العثور على رابط Instagram');
+      await ctx.replyWithVideo({ url: downloadUrl, caption: '🌷 تم التحميل من Instagram!' });
+    } catch (e) {
+      console.error(e);
+      ctx.reply('🌷 حصل خطأ أثناء تحميل Instagram.');
+    }
+  }
+});
+
+// ⛩ قاعدة بيانات بسيطة
+global.db = {
+  users: {},
+  logs: []
+};
+
+// 📜 دالة تسجّل اللوج
+function saveLog(ctx, isCmd = false) {
+  const sender = ctx.from.id;
+  const pushname = ctx.from.first_name || ctx.from.username || "Unknown";
+  const groupName = ctx.chat.title || "Private Chat";
+  const budy = ctx.message?.text || ctx.updateType;
+
+  // ⚡ إضافة لوج للذاكرة
+  const log = {
+    type: ctx.chat.type,
+    text: budy,
+    from: pushname,
+    sender: sender,
+    group: groupName,
+  };
+  global.db.logs.push(log);
+
+
+
+  if (isCmd && !global.db.users[sender]) {
+    global.db.users[sender] = { firstCommand: budy };
+    fs.writeFileSync("./user.json", JSON.stringify(global.db.users, null, 2));
+  }
+}
+
+bot.on("message", (ctx) => {
+  const isCmd = ctx.message.text?.startsWith("/") || false;
+  saveLog(ctx, isCmd);
+});
+
+
+bot.command("logs", (ctx) => {
+  if (global.db.logs.length === 0) {
+    return ctx.reply("📭 لا يوجد لوجات لحد دلوقتي.");
+  }
+
+  let lastLogs = global.db.logs.slice(-5) // آخر 5 بس
+    .map((log, i) => `${i + 1}. [${log.type}] ${log.from}: ${log.text}`)
+    .join("\n");
+
+  ctx.reply(`📜 آخر اللوجات:\n\n${lastLogs}`);
+});
+if (!global.groupData) {
+  global.groupData = {};
+}
+
+// حفظ الرسائل لكل مستخدم
+bot.on("message", async (ctx) => {
+  if (!ctx.chat || ctx.chat.type !== "supergroup") return;
+
+  const chatId = ctx.chat.id;
+  const userId = ctx.from.id;
+
+  if (!global.groupData[chatId]) {
+    global.groupData[chatId] = {};
+  }
+
+  const groupUsers = global.groupData[chatId];
+
+  if (!groupUsers[userId]) {
+    groupUsers[userId] = { messagesSent: 0 };
+  }
+
+  if (ctx.message.text) {
+    groupUsers[userId].messagesSent += 1;
+  }
+});
+
+
+bot.launch();
+process.once('SIGINT', () => bot.stop('SIGINT'))
+process.once('SIGTERM', () => bot.stop('SIGTERM'))
+console.log("Tele bot is starting 🌷!");
